@@ -4,7 +4,7 @@
 typedef struct {
     GString  *data;
     gchar    *raw;
-    gunichar  token;
+    String    token;
 } Tokenizer;
 
 void tokenizer_init(Tokenizer *tokenizer);
