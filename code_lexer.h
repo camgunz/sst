@@ -1,5 +1,5 @@
-#ifndef CODE_LEXER_H__
-#define CODE_LEXER_H__
+#ifndef LEXER_H__
+#define LEXER_H__
 
 typedef enum {
     MATHOP_ADD,
@@ -118,7 +118,7 @@ extern const char *KeywordValues[KEYWORD_MAX];
 typedef struct {
     String code;
     Token  token;
-} CodeLexer;
+} Lexer;
 
 #endif
 

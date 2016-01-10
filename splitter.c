@@ -7,7 +7,7 @@
 
 #include "utils.h"
 #include "str.h"
-#include "lexer.h"
+#include "splitter.h"
 
 static bool find_next_code_tag_start(gchar *data, String *tag) {
     gchar *open = data;
@@ -103,31 +103,31 @@ static bool find_next_code_tag(gchar *data, String *tag) {
     return false;
 }
 
-void lexer_clear(Lexer *lexer) {
-    lexer->data = NULL;
-    lexer->section_is_code = false;
-    string_clear(&lexer->section);
+void splitter_clear(Splitter *splitter) {
+    splitter->data = NULL;
+    splitter->section_is_code = false;
+    string_clear(&splitter->section);
 }
 
-void lexer_init(Lexer *lexer, gchar *data) {
+void splitter_init(Splitter *splitter, gchar *data) {
     if (!g_utf8_validate(data, -1, NULL)) {
-        die("Invalid UTF-8 data passed to lexer\n");
+        die("Invalid UTF-8 data passed to splitter\n");
     }
 
-    lexer_clear(lexer);
+    splitter_clear(splitter);
 
-    lexer->data = data;
-    lexer->section_is_code = false;
+    splitter->data = data;
+    splitter->section_is_code = false;
 }
 
-bool lexer_load_next(Lexer *lexer) {
+bool splitter_load_next(Splitter *splitter) {
     gchar *s;
 
-    if (lexer->section.data) {
-        s = lexer->section.data + lexer->section.len;
+    if (splitter->section.data) {
+        s = splitter->section.data + splitter->section.len;
     }
     else {
-        s = lexer->data;
+        s = splitter->data;
     }
 
     if (!s) {
@@ -141,24 +141,24 @@ bool lexer_load_next(Lexer *lexer) {
     gchar *code_tag_start = find_next_code_tag_start(s);
 
     if (!code_tag) {
-        lexer->section_is_code = false;
-        lexer->section.data = s;
-        lexer->section.len = strlen(s);
+        splitter->section_is_code = false;
+        splitter->section.data = s;
+        splitter->section.len = strlen(s);
     }
     else if (code_tag_start == s) {
-        lexer->section_is_code = find_next_code_tag(
-            code_tag_start, &lexer->section
+        splitter->section_is_code = find_next_code_tag(
+            code_tag_start, &splitter->section
         );
 
-        if (!lexer->section_is_code) {
-            lexer->section.data = code_tag_start;
-            lexer->section.len = strlen(code_tag_start);
+        if (!splitter->section_is_code) {
+            splitter->section.data = code_tag_start;
+            splitter->section.len = strlen(code_tag_start);
         }
     }
     else {
-        lexer->section_is_code = false;
-        lexer->section.data = s;
-        lexer->section.len = code_tag_start - s;
+        splitter->section_is_code = false;
+        splitter->section.data = s;
+        splitter->section.len = code_tag_start - s;
     }
 
     return true;
