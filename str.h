@@ -6,6 +6,8 @@ typedef struct {
     gsize  len;
 } String;
 
+void   string_clear(String *s);
+bool   string_empty(String *s);
 bool   string_equals(String *s, const gchar *cs);
 bool   string_starts_with(String *s, const gchar *cs);
 bool   string_first_char(String *s, gunichar *uc);

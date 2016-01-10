@@ -15,7 +15,7 @@ static bool find_next_code_tag_start(gchar *data, String *tag) {
     while (true) {
         open = find_next(open, '{');
 
-        if (!open) {
+        if (empty_string(open)) {
             return NULL;
         }
 
@@ -47,7 +47,7 @@ static bool find_next_code_tag(gchar *data, String *tag) {
 
     cursor = g_utf8_next_char(cursor);
 
-    while (cursor && (*cursor) != '\0') {
+    while (!empty_string(cursor)) {
         gunichar uc = g_utf8_get_char(cursor);
 
         switch (uc) {
@@ -130,11 +130,7 @@ bool splitter_load_next(Splitter *splitter) {
         s = splitter->data;
     }
 
-    if (!s) {
-        return false;
-    }
-
-    if ((*s) == '\0') {
+    if (empty_string(s)) {
         return false;
     }
 

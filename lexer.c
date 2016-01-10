@@ -10,81 +10,22 @@
 #include "lexer.h"
 
 const gunichar MathOpValues[MATHOP_MAX] = {
-    '+',
-    '-',
-    '*',
-    '/',
-    '%',
-    '^',
+    '+', '-', '*', '/', '%', '^',
 };
 
 const gunichar SymbolValues[SYMBOL_MAX] = {
-    '(',
-    ')',
-    '[',
-    ']',
-    ',',
-    '.',
-    ''',
-    '`',
-    '"'
+    '(', ')', '[', ']', ',', '.', ''', '`', '"'
 };
 
 const gunichar WhitespaceValues[WHITESPACE_MAX] = {
-    ' ',
-    '\t',
-    '\r',
-    '\n',
-};
-
-const gunichar BooleanValues[BOOLEAN_MAX] = {
-    '!',
-    '=',
-    '<',
-    '>',
-    '&',
-    '|',
-};
-
-const char *UnaryBoolOpValues[UBOOLOP_MAX] = {
-    "!"
-};
-
-const char *BoolOpValues[BOOLOP_MAX] = {
-    "==",
-    "!=",
-    ">",
-    ">=",
-    "<",
-    "<=",
-    "&&",
-    "||"
-};
-
-const char *BoolOpValues[BOOLOP_MAX] = {
-    "==",
-    "!=",
-    ">",
-    ">=",
-    "<",
-    "<=",
-    "&&",
-    "||"
+    ' ', '\t', '\r', '\n',
 };
 
 const char *KeywordValues[KEYWORD_MAX] = {
-    "include"
-    "if",
-    "elif",
-    "else",
-    "endif",
-    "for",
-    "in",
-    "endfor",
-    "raw",
+    "include" "if", "elif", "else", "endif", "for", "in", "endfor", "raw",
     "endraw",
-    "range"
 };
+
 
 void lexer_clear(Lexer *lexer) {
     string_clear(&lexer->code);
@@ -98,26 +39,22 @@ void lexer_init(Lexer *lexer, String *code) {
     lexer->code.len = code->len;
 }
 
-bool lexer_load_next(Lexer *lexer) {
+LexerStatus lexer_load_next(Lexer *lexer) {
     String buf;
     gunichar uc;
 
-    if (!lexer->code.data) {
-        return false;
-    }
-
-    if (lexer->code.len == 0) {
-        return false;
+    if (string_empty(&lexer->code)) {
+        return LEXER_EOF;
     }
 
     buf.data = lexer->code.data;
     buf.len = 0;
 
     if (!string_pop_char(&lexer->code, &uc)) {
-        return false;
+        return LEXER_EOF;
     }
 
-    if (g_unichar_is_digit(uc)) {
+    if (uc == '-' || g_unichar_is_digit(uc)) {
         bool found_at_least_one_digit = false;
         bool found_period = false;
 
@@ -125,50 +62,7 @@ bool lexer_load_next(Lexer *lexer) {
             gunichar nuc;
 
             if (!string_first_char(&lexer->code, &nuc)) {
-                return false;
-            }
-
-            if (g_unichar_isdigit(nuc)) {
-                found_at_least_one_digit = true;
-                string_pop_char(&lexer->code, NULL);
-                continue;
-            }
-
-            if (nuc == ',') {
-                string_pop_char(&lexer->code, NULL);
-                continue;
-            u
-
-            if (nuc == '.') {
-                if (!found_period) {
-                    found_period = true;
-                    string_pop_char(&lexer->code, NULL);
-                    continue;
-                }
-            }
-
-            break;
-        }
-
-        if (found_at_least_one_digit) {
-            buf.len = lexer->code.data - buf.data;
-            lexer->token.type = TOKEN_NUMBER;
-            lexer->token.as.number = parse_number(*buf);
-            lexer->code.data = buf.data + buf.len;
-            lexer->code.len -= buf.len;
-            return true;
-        }
-    }
-
-    if (uc == '-') {
-        bool found_at_least_one_digit = false;
-        bool found_period = false;
-
-        while (true) {
-            gunichar nuc;
-
-            if (!string_first_char(&lexer->code, &nuc)) {
-                return false;
+                return LEXER_EOF;
             }
 
             if (g_unichar_isdigit(nuc)) {
@@ -196,36 +90,17 @@ bool lexer_load_next(Lexer *lexer) {
         if (found_at_least_one_digit) {
             buf.len = lexer->code.data - buf.data;
             lexer->token.type = TOKEN_NUMBER;
-            lexer->token.as.number = parse_number(*buf);
-            lexer->code.data = buf.data + buf.len;
+            lexer->token.as.number.data = buf.data;
+            lexer->token.as.number.len = buf.len;
             lexer->code.len -= buf.len;
-            return true;
+            return LEXER_OK
         }
     }
 
     if (g_unichar_is_alnum(uc)) {
         bool at_least_one_alnum = true;
 
-        while (true) {
-            gunichar nuc;
-
-            if (!string_first_char(&lexer->code, &nuc)) {
-                return false;
-            }
-
-            if (g_unichar_isalnum(nuc)) {
-                at_least_one_alnum = true;
-                string_pop_char(&lexer->code);
-                continue;
-            }
-
-            if (nuc == '.') {
-                if (at_least_one_alnum) {
-                    at_least_one_alnum = false;
-                    string_pop_char(&lexer->code, NULL);
-                    continue;
-                }
-            }
+        while (string_pop_char_if_alnum(&lexer->code, NULL)) {
         }
 
         buf.len = lexer->code.data - buf.data;
@@ -234,16 +109,15 @@ bool lexer_load_next(Lexer *lexer) {
             if (string_equals(&buf, KeywordValues[kw])) {
                 lexer->token.type = TOKEN_KEYWORD;
                 lexer->token.as.keyword = kw;
-                return true;
+                return LEXER_OK;
             }
         }
 
         lexer->token.type = TOKEN_IDENTIFIER;
         lexer->token.as.identifier.data = buf.data;
         lexer->token.as.identifier.len = buf.len;
-        lexer->code.data = buf.data + buf.len;
         lexer->code.len -= buf.len;
-        return true;
+        return LEXER_OK;
     }
 
     if (uc == '\'' || uc == '`' || uc == '"') {
@@ -251,17 +125,17 @@ bool lexer_load_next(Lexer *lexer) {
         gchar *string_end = string_find(&lexer->code, uc);
 
         if (!string_end) {
-            return false;
+            return LEXER_EOF;
         }
 
         string_start = g_utf8_next_char(string_start);
 
         if (!string_start) {
-            return false;
+            return LEXER_EOF;
         }
 
         if (string_start > string_end) {
-            return false;
+            return LEXER_ERROR;
         }
 
         lexer->token.type = TOKEN_STRING;
@@ -270,18 +144,16 @@ bool lexer_load_next(Lexer *lexer) {
 
         string_end = g_utf8_next_char(string_end);
 
-        buf.len = string_end - string_start;
-
         if (!string_end) {
             lexer->code.data = NULL;
             lexer->code.len = 0;
         }
         else {
-            lexer->code.data = buf.data + buf.len;
-            lexer->code.len -= buf.len;
+            lexer->code.data = string_end;
+            lexer->code.len -= buf.data - string_end;
         }
 
-        return true;
+        return LEXER_OK;
     }
 
     if (uc == '=') {
@@ -293,7 +165,7 @@ bool lexer_load_next(Lexer *lexer) {
             lexer->token.type = TOKEN_UNKNOWN;
             lexer->token.as.literal = uc;
         }
-        return true;
+        return LEXER_OK;
     }
 
     if (uc == '<') {
@@ -305,7 +177,7 @@ bool lexer_load_next(Lexer *lexer) {
             lexer->token.type = TOKEN_UNARY_BOOLOP;
             lexer->token.as.unary_bool_op = UBOOLOP_LESS_THAN;
         }
-        return true;
+        return LEXER_OK;
     }
 
     if (uc == '>') {
@@ -317,19 +189,19 @@ bool lexer_load_next(Lexer *lexer) {
             lexer->token.type = TOKEN_UNARY_BOOLOP;
             lexer->token.as.unary_bool_op = UBOOLOP_GREATER_THAN;
         }
-        return true;
+        return LEXER_OK;
     }
 
     if (uc == '&') {
         if (string_pop_char_if_equals(lexer->code, '&')) {
             lexer->token.type = TOKEN_BOOLOP;
-            lexer->token.as.bool_op = BOOLOP_AnD;
+            lexer->token.as.bool_op = BOOLOP_AND;
         }
         else {
             lexer->token.type = TOKEN_UNKNOWN;
             lexer->token.as.literal = uc;
         }
-        return true;
+        return LEXER_OK;
     }
 
     if (uc == '|') {
@@ -341,7 +213,7 @@ bool lexer_load_next(Lexer *lexer) {
             lexer->token.type = TOKEN_UNKNOWN;
             lexer->token.as.literal = uc;
         }
-        return true;
+        return LEXER_OK;
     }
 
     if (uc == '!') {
@@ -353,14 +225,14 @@ bool lexer_load_next(Lexer *lexer) {
             lexer->token.type = TOKEN_UNARY_BOOLOP;
             lexer->token.as.unary_bool_op = UBOOLOP_NOT;
         }
-        return true;
+        return LEXER_OK;
     }
 
     for (MathOp m = MATHOP_FIRST; m < MATHOP_MAX; m++) {
         if (uc == MathOpValues[m]) {
             lexer->token.type = TOKEN_MATHOP;
             lexer->token.as.math_op = m;
-            return true;
+            return LEXER_OK;
         }
     }
 
@@ -368,7 +240,7 @@ bool lexer_load_next(Lexer *lexer) {
         if (uc == SymbolValues[s]) {
             lexer->token.type = TOKEN_SYMBOL;
             lexer->token.as.symbol = s;
-            return true;
+            return LEXER_OK;
         }
     }
 
@@ -376,13 +248,13 @@ bool lexer_load_next(Lexer *lexer) {
         if (uc == WhitespaceValues[ws]) {
             lexer->token.type = TOKEN_WHITESPACE;
             lexer->token.as.whitespace = ws;
-            return true;
+            return LEXER_OK;
         }
     }
 
     lexer->token.type = TOKEN_UNKNOWN;
     lexer->token.as.literal = uc
-    return true;
+    return LEXER_UNKNOWN_TOKEN;
 }
 
 /* vi: set et ts=4 sw=4: */

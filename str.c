@@ -10,6 +10,18 @@ void string_clear(String *s) {
     s->len = 0;
 }
 
+bool string_empty(String *s) {
+    if (!s->data) {
+        return true;
+    }
+
+    if (s->len == 0) {
+        return true;
+    }
+
+    return false;
+}
+
 bool string_equals(String *s, const gchar *cs) {
     gsize i = 0;
 
@@ -51,11 +63,7 @@ bool string_starts_with(String *s, const gchar *cs) {
 }
 
 bool string_first_char(String *s, gunichar *uc) {
-    if (!s->data) {
-        return false;
-    }
-
-    if (s->len == 0) {
+    if (string_empty(s)) {
         return false;
     }
 
@@ -64,11 +72,7 @@ bool string_first_char(String *s, gunichar *uc) {
 }
 
 bool string_pop_char(String *s, gunichar *uc) {
-    if (!s->data) {
-        return false;
-    }
-
-    if (s->len == 0) {
+    if (string_empty(s)) {
         return false;
     }
 
@@ -102,11 +106,7 @@ bool string_pop_char(String *s, gunichar *uc) {
 }
 
 bool string_first_char_equals(String *s, gunichar uc) {
-    if (!s->data) {
-        return false;
-    }
-
-    if (s->len == 0) {
+    if (string_empty(s)) {
         return false;
     }
 
@@ -116,11 +116,7 @@ bool string_first_char_equals(String *s, gunichar uc) {
 }
 
 bool string_pop_char_if_equals(String *s, gunichar uc) {
-    if (!s->data) {
-        return false;
-    }
-
-    if (s->len == 0) {
+    if (string_empty(s)) {
         return false;
     }
 
@@ -156,11 +152,7 @@ bool string_pop_char_if_equals(String *s, gunichar uc) {
 }
 
 bool string_pop_char_if_digit(String *s, gunichar *uc) {
-    if (!s->data) {
-        return false;
-    }
-
-    if (s->len == 0) {
+    if (string_empty(s)) {
         return false;
     }
 
@@ -200,11 +192,7 @@ bool string_pop_char_if_digit(String *s, gunichar *uc) {
 }
 
 bool string_pop_char_if_alnum(String *s, gunichar *uc) {
-    if (!s->data) {
-        return false;
-    }
-
-    if (s->len == 0) {
+    if (string_empty(s)) {
         return false;
     }
 
@@ -244,12 +232,8 @@ bool string_pop_char_if_alnum(String *s, gunichar *uc) {
 }
 
 gchar* string_find(String *s, gunichar uc) {
-    if (!s->data) {
-        return NULL;
-    }
-
-    if (s->len == 0) {
-        return NULL;
+    if (string_empty(s)) {
+        return false;
     }
 
     return g_utf8_strchr(s->data, s->len, uc);

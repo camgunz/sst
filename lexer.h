@@ -90,11 +90,19 @@ typedef enum {
     TOKEN_MAX
 } TokenType;
 
+typedef enum {
+    LEXER_OK,
+    LEXER_EOF,
+    LEXER_ERROR,
+    LEXER_UNKNOWN_TOKEN,
+    LEXER_MAX
+} LexerStatus;
+
 typedef struct {
     TokenType type;
     union {
         gunichar    literal;
-        gint64      number;
+        String      number;
         String      identifier;
         String      string;
         MathOp      math_op;
@@ -106,19 +114,19 @@ typedef struct {
     } as;
 } Token;
 
-extern const gunichar MathOpValues[MATHOP_MAX];
-extern const gunichar SymbolValues[SYMBOL_MAX];
-extern const gunichar WhitespaceValues[WHITESPACE_MAX];
-extern const gunichar BooleanValues[BOOLEAN_MAX];
-
-extern const char *UnaryBoolOpValues[UBOOLOP_MAX];
-extern const char *BoolOpValues[BOOLOP_MAX];
-extern const char *KeywordValues[KEYWORD_MAX];
+extern const gunichar  MathOpValues[MATHOP_MAX];
+extern const gunichar  SymbolValues[SYMBOL_MAX];
+extern const gunichar  WhitespaceValues[WHITESPACE_MAX];
+extern const char     *KeywordValues[KEYWORD_MAX];
 
 typedef struct {
     String code;
     Token  token;
 } Lexer;
+
+void        lexer_clear(Lexer *lexer);
+void        lexer_init(Lexer *lexer, String *code);
+LexerStatus lexer_load_next(Lexer *lexer);
 
 #endif
 

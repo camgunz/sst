@@ -42,3 +42,15 @@ gchar* next_char_equals(gchar *data, gunichar c) {
     return data;
 }
 
+bool empty_string(gchar *data) {
+    if (!data) {
+        return true;
+    }
+
+    if ((*data) == '\0') {
+        return true;
+    }
+
+    return false;
+}
+
