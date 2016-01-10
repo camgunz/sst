@@ -16,7 +16,7 @@ typedef struct {
  * {{ site.name | capitalize }}
  */
 typedef struct {
-    String expression;
+    String literal;
     String filter_name; /* optional */
 } Expression;
 
@@ -55,6 +55,20 @@ typedef struct {
     String literal;
     String block;
 } Raw;
+
+typedef enum {
+    LEXER_OK,
+    LEXER_EOF,
+    LEXER_INTERNAL_ERROR,
+    LEXER_UNKNOWN_TOKEN,
+    LEXER_MAX
+} ParserStatus;
+
+typedef struct {
+    Lexer lexer;
+} Parser;
+
+ParserStatus parser_validate(Parser *parser);
 
 #endif
 

@@ -93,7 +93,7 @@ typedef enum {
 typedef enum {
     LEXER_OK,
     LEXER_EOF,
-    LEXER_ERROR,
+    LEXER_INTERNAL_ERROR,
     LEXER_UNKNOWN_TOKEN,
     LEXER_MAX
 } LexerStatus;

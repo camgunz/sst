@@ -135,7 +135,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
         }
 
         if (string_start > string_end) {
-            return LEXER_ERROR;
+            return LEXER_INTERNAL_ERROR;
         }
 
         lexer->token.type = TOKEN_STRING;
