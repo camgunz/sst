@@ -3,5 +3,8 @@
 
 void die(const char *format, ...);
 
+gchar* find_next(gchar *data, gunichar c);
+gchar* next_char_equals(gchar *data, gunichar c);
+
 #endif
 

@@ -1,25 +1,29 @@
 /*
- * Expressions:
+ * ## Literals
  *
- * Numeric literal:
+ * ### Numeric Literal
  *   - integer
  *   - decimal
  *   - strip out commas
  *   - all math uses bignums (figure out a library for this)
  *
- * String literal:
+ * ### String Literal
  *   - quote type (', `, ")
  *
- * Sequence literals:
- *   - []
+ * ### Sequence literals
+ *   - start with "["
+ *   - end with "]"
+ *   - contain 1 or more numeric or string literals, separated by ","
  *
- * Range literals:
- *   - [, ]: inclusive
- *   - (, ): exclusive
- *   - Math expressions as arguments, 1, 2 or 3 arguments total.
- *   - Also accept '..' for the second argument
+ * ### Range literals
+ *   - start with "range("
+ *   - end with ")"
+ *   - 1, 2 or 3 arguments total separated by ","
+ *   - Arguments are math expressions
+ *   - 2nd argument may also be ".."
+ *   - Default 3rd argument is 1
  *
- * Identifier:
+ * ### Identifier
  *   - Alphanumeric (no restrictions on position)
  *     - If there is no alphabetical member, it's a numeric literal instead
  *   - First member cannot be:
@@ -28,19 +32,28 @@
  *     - "
  *     - [
  *     - (
+ */
+
+/*
+ * ## Operators
  *
- * Math operator:
+ * ### Math operator
  *   - +, -, *, /, %, ^
  *
- * Unary boolean operator:
+ * ### Unary boolean operator
  *   - !
- * Boolean operator:
+ *
+ * ### Boolean operator
  *   - ==, !-, >, >=, <, <=, ||, &&
  *
- * Math expressions:
+ * ### Math expressions
  *   - First operand (numeric literal or identifier)
  *   - operator
  *   - Second operand (numeric literal or identifier)
+ */
+
+/*
+ * Expressions:
  *
  * Unary Boolean expression:
  *   - Unary boolean operator
