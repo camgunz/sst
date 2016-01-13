@@ -14,7 +14,7 @@ const gunichar MathOpValues[MATHOP_MAX] = {
 };
 
 const gunichar SymbolValues[SYMBOL_MAX] = {
-    '(', ')', '[', ']', ',', '.', ''', '`', '"'
+    '(', ')', '[', ']', ',', '.', '\'', '`', '"'
 };
 
 const gunichar WhitespaceValues[WHITESPACE_MAX] = {
