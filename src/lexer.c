@@ -54,7 +54,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
         return LEXER_EOF;
     }
 
-    if (uc == '-' || g_unichar_is_digit(uc)) {
+    if (uc == '-' || g_unichar_isdigit(uc)) {
         bool found_at_least_one_digit = false;
         bool found_period = false;
 
@@ -93,13 +93,11 @@ LexerStatus lexer_load_next(Lexer *lexer) {
             lexer->token.as.number.data = buf.data;
             lexer->token.as.number.len = buf.len;
             lexer->code.len -= buf.len;
-            return LEXER_OK
+            return LEXER_OK;
         }
     }
 
-    if (g_unichar_is_alnum(uc)) {
-        bool at_least_one_alnum = true;
-
+    if (g_unichar_isalnum(uc)) {
         while (string_pop_char_if_alnum(&lexer->code, NULL)) {
         }
 
@@ -157,7 +155,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
     }
 
     if (uc == '=') {
-        if (string_pop_char_if_equals(lexer->code, '=')) {
+        if (string_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_EQUAL;
         }
@@ -169,31 +167,31 @@ LexerStatus lexer_load_next(Lexer *lexer) {
     }
 
     if (uc == '<') {
-        if (string_pop_char_if_equals(lexer->code, '=')) {
+        if (string_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_LESS_THAN_OR_EQUAL;
         }
         else {
             lexer->token.type = TOKEN_UNARY_BOOLOP;
-            lexer->token.as.unary_bool_op = UBOOLOP_LESS_THAN;
+            lexer->token.as.unary_bool_op = BOOLOP_LESS_THAN;
         }
         return LEXER_OK;
     }
 
     if (uc == '>') {
-        if (string_pop_char_if_equals(lexer->code, '=')) {
+        if (string_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_GREATER_THAN_OR_EQUAL;
         }
         else {
             lexer->token.type = TOKEN_UNARY_BOOLOP;
-            lexer->token.as.unary_bool_op = UBOOLOP_GREATER_THAN;
+            lexer->token.as.unary_bool_op = BOOLOP_GREATER_THAN;
         }
         return LEXER_OK;
     }
 
     if (uc == '&') {
-        if (string_pop_char_if_equals(lexer->code, '&')) {
+        if (string_pop_char_if_equals(&lexer->code, '&')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_AND;
         }
@@ -205,7 +203,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
     }
 
     if (uc == '|') {
-        if (string_pop_char_if_equals(lexer->code, '|')) {
+        if (string_pop_char_if_equals(&lexer->code, '|')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_OR;
         }
@@ -217,7 +215,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
     }
 
     if (uc == '!') {
-        if (string_pop_char_if_equals(lexer->code, '=')) {
+        if (string_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_NOT_EQUAL;
         }
@@ -253,7 +251,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
     }
 
     lexer->token.type = TOKEN_UNKNOWN;
-    lexer->token.as.literal = uc
+    lexer->token.as.literal = uc;
     return LEXER_UNKNOWN_TOKEN;
 }
 
