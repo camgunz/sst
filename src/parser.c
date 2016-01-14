@@ -6,6 +6,10 @@
 
 #include <glib.h>
 
+#include "str.h"
+#include "lexer.h"
+#include "parser.h"
+
 /*
  * Operations:
  *   - Initialize
@@ -14,7 +18,10 @@
  */
 
 void parser_init(Parser *parser, String *code) {
-    lexer_init(&Parser.lexer, code);
+    lexer_init(&parser->lexer, code);
+    parser->parenthesis_level = 0;
+    parser->bracket_level = 0;
+    parser->brace_level = 0;
 }
 
 ParserStatus validate_number(Parser *parser) {
@@ -26,6 +33,7 @@ ParserStatus validate_number(Parser *parser) {
      *   - Whitespace
      *     - Math Op
      */
+    return PARSER_OK;
 }
 
 ParserStatus validate_keyword(Parser *parser) {
@@ -34,7 +42,7 @@ ParserStatus validate_keyword(Parser *parser) {
             /* whitespace, string (valid path) */
         }
         case KEYWORD_IF: {
-            /* Whitespace, conditional
+            /* Whitespace, conditional */
         }
         case KEYWORD_ELIF: {
         }
@@ -58,27 +66,36 @@ ParserStatus validate_keyword(Parser *parser) {
             return PARSER_UNKNOWN_TOKEN;
         }
     }
+
+    return PARSER_OK;
 }
 
 ParserStatus validate_identifier(Parser *parser) {
+    return PARSER_OK;
 }
 
 ParserStatus validate_string(Parser *parser) {
+    return PARSER_OK;
 }
 
 ParserStatus validate_boolop(Parser *parser) {
+    return PARSER_OK;
 }
 
 ParserStatus validate_unary_boolop(Parser *parser) {
+    return PARSER_OK;
 }
 
 ParserStatus validate_mathop(Parser *parser) {
+    return PARSER_OK;
 }
 
 ParserStatus validate_symbol(Parser *parser) {
+    return PARSER_OK;
 }
 
 ParserStatus validate_whitespace(Parser *parser) {
+    return PARSER_OK;
 }
 
 ParserStatus parser_validate(Parser *parser) {

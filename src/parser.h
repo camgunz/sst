@@ -1,7 +1,7 @@
 #ifndef PARSER_H__
 #define PARSER_H__
 
-typedef String TextBlock;
+typedef String Text;
 
 /*
  * {{ include "path/to/template.html" }}
@@ -57,15 +57,42 @@ typedef struct {
 } Raw;
 
 typedef enum {
-    LEXER_OK,
-    LEXER_EOF,
-    LEXER_INTERNAL_ERROR,
-    LEXER_UNKNOWN_TOKEN,
-    LEXER_MAX
+    PARSER_OK = LEXER_OK,
+    PARSER_EOF = LEXER_EOF,
+    PARSER_INTERNAL_ERROR = LEXER_INTERNAL_ERROR,
+    PARSER_UNKNOWN_TOKEN = LEXER_UNKNOWN_TOKEN,
+    PARSER_UNEXPECTED_CLOSE_PARENTHESIS,
+    PARSER_MAX
 } ParserStatus;
 
+typedef enum {
+    BLOCK_TEXT,
+    BLOCK_INCLUDE,
+    BLOCK_EXPRESSION,
+    BLOCK_CONDITIONAL,
+    BLOCK_ITERATION,
+    BLOCK_RAW,
+    BLOCK_MAX
+} BlockType;
+
 typedef struct {
-    Lexer lexer;
+    BlockType type;
+    union {
+        Text text;
+        Include include;
+        Expression expression;
+        Conditional conditional;
+        Iteration iteration;
+        Raw raw;
+    } as;
+} Block;
+
+typedef struct {
+    Lexer   lexer;
+    size_t  parenthesis_level;
+    size_t  bracket_level;
+    size_t  brace_level;
+    GArray *blocks;
 } Parser;
 
 ParserStatus parser_validate(Parser *parser);

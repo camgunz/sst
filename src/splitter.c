@@ -9,7 +9,7 @@
 #include "str.h"
 #include "splitter.h"
 
-static bool find_next_code_tag_start(gchar *data, String *tag) {
+static gchar* find_next_code_tag_start(gchar *data) {
     gchar *open = data;
 
     while (true) {
@@ -136,7 +136,7 @@ bool splitter_load_next(Splitter *splitter) {
 
     gchar *code_tag_start = find_next_code_tag_start(s);
 
-    if (!code_tag) {
+    if (!code_tag_start) {
         splitter->section_is_code = false;
         splitter->section.data = s;
         splitter->section.len = strlen(s);

@@ -34,7 +34,7 @@ bool string_equals(String *s, const gchar *cs) {
             return false;
         }
 
-        if (s[i] != cs[i]) {
+        if (s->data[i] != cs[i]) {
             return false;
         }
 
@@ -54,7 +54,7 @@ bool string_starts_with(String *s, const gchar *cs) {
             return false;
         }
 
-        if (s[i] != c[i]) {
+        if (s->data[i] != cs[i]) {
             return false;
         }
 
@@ -71,6 +71,30 @@ bool string_first_char(String *s, gunichar *uc) {
     return true;
 }
 
+static bool advance_to_next_char(String *s) {
+    gchar *s2 = g_utf8_next_char(s->data);
+
+    if (!s2) {
+        string_clear(s);
+        return true;
+    }
+
+    if (s2 < s->data) {
+        return false;
+    }
+
+    s->len = s2 - s->data;
+
+    if (s->len == 0) {
+        string_clear(s);
+    }
+    else {
+        s->data = s2;
+    }
+
+    return true;
+}
+
 bool string_pop_char(String *s, gunichar *uc) {
     if (string_empty(s)) {
         return false;
@@ -80,29 +104,7 @@ bool string_pop_char(String *s, gunichar *uc) {
         *uc = g_utf8_get_char(s->data);
     }
 
-    gchar *s2 = g_utf8_next_char(s->data);
-
-    if (!s2) {
-        string_clear(s);
-        return true;
-    }
-
-    ptrdiff_t delta = s2 - s->data;
-
-    if (delta > s->len) {
-        s->len = 0;
-        return true;
-    }
-
-    s->len -= delta;
-
-    if (s->len == 0) {
-        string_clear(s);
-        return true;
-    }
-
-    s->data = s2;
-    return true;
+    return advance_to_next_char(s);
 }
 
 bool string_first_char_equals(String *s, gunichar uc) {
@@ -116,39 +118,11 @@ bool string_first_char_equals(String *s, gunichar uc) {
 }
 
 bool string_pop_char_if_equals(String *s, gunichar uc) {
-    if (string_empty(s)) {
+    if (!string_first_char_equals(s, uc)) {
         return false;
     }
 
-    gunichar uc2 = g_utf8_get_char(s->data);
-
-    if (uc2 != uc) {
-        return false;
-    }
-
-    gchar *s2 = g_utf8_next_char(s->data);
-
-    if (!s2) {
-        string_clear(s);
-        return true;
-    }
-
-    ptrdiff_t delta = s2 - s->data;
-
-    if (delta > s->len) {
-        s->len = 0;
-        return true;
-    }
-
-    s->len -= delta;
-
-    if (s->len == 0) {
-        string_clear(s);
-        return true;
-    }
-
-    s->data = s2;
-    return true;
+    return advance_to_next_char(s);
 }
 
 bool string_pop_char_if_digit(String *s, gunichar *uc) {
@@ -158,7 +132,7 @@ bool string_pop_char_if_digit(String *s, gunichar *uc) {
 
     gunichar uc2 = g_utf8_get_char(s->data);
 
-    if (!g_unichar_is_digit(uc2)) {
+    if (!g_unichar_isdigit(uc2)) {
         return false;
     }
 
@@ -166,29 +140,7 @@ bool string_pop_char_if_digit(String *s, gunichar *uc) {
         *uc = uc2;
     }
 
-    gchar *s2 = g_utf8_next_char(s->data);
-
-    if (!s2) {
-        string_clear(s);
-        return true;
-    }
-
-    ptrdiff_t delta = s2 - s->data;
-
-    if (delta > s->len) {
-        s->len = 0;
-        return true;
-    }
-
-    s->len -= delta;
-
-    if (s->len == 0) {
-        string_clear(s);
-        return true;
-    }
-
-    s->data = s2;
-    return true;
+    return advance_to_next_char(s);
 }
 
 bool string_pop_char_if_alnum(String *s, gunichar *uc) {
@@ -198,7 +150,7 @@ bool string_pop_char_if_alnum(String *s, gunichar *uc) {
 
     gunichar uc2 = g_utf8_get_char(s->data);
 
-    if (!g_unichar_is_alnum(uc2)) {
+    if (!g_unichar_isalnum(uc2)) {
         return false;
     }
 
@@ -206,29 +158,7 @@ bool string_pop_char_if_alnum(String *s, gunichar *uc) {
         *uc = uc2;
     }
 
-    gchar *s2 = g_utf8_next_char(s->data);
-
-    if (!s2) {
-        string_clear(s);
-        return true;
-    }
-
-    ptrdiff_t delta = s2 - s->data;
-
-    if (delta > s->len) {
-        s->len = 0;
-        return true;
-    }
-
-    s->len -= delta;
-
-    if (s->len == 0) {
-        string_clear(s);
-        return true;
-    }
-
-    s->data = s2;
-    return true;
+    return advance_to_next_char(s);
 }
 
 gchar* string_find(String *s, gunichar uc) {
