@@ -10,6 +10,8 @@
 #include "lexer.h"
 #include "parser.h"
 
+#define TOKEN_ALLOC_COUNT 1000
+
 /*
  * Operations:
  *   - Initialize
@@ -22,9 +24,13 @@ void parser_init(Parser *parser, String *code) {
     parser->parenthesis_level = 0;
     parser->bracket_level = 0;
     parser->brace_level = 0;
+    parser->tokens = g_array_sized_new(
+        false, false, sizeof(Token), TOKEN_ALLOC_COUNT
+    );
 }
 
 ParserStatus validate_number(Parser *parser) {
+
     /*
      * We expect:
      *   - Close parenthesis
