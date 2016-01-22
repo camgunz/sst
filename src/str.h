@@ -17,6 +17,7 @@ bool   string_pop_char_if_equals(String *s, gunichar uc);
 bool   string_pop_char_if_digit(String *s, gunichar *uc);
 bool   string_pop_char_if_alnum(String *s, gunichar *uc);
 gchar* string_find(String *s, gunichar uc);
+void   string_copy(String *dst, String *src);
 
 #endif
 

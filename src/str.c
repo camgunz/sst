@@ -169,5 +169,10 @@ gchar* string_find(String *s, gunichar uc) {
     return g_utf8_strchr(s->data, s->len, uc);
 }
 
+void string_copy(String *dst, String *src) {
+    dst->data = src->data;
+    dst->len  = src->len;
+}
+
 /* vi: set et ts=4 sw=4: */
 

@@ -23,6 +23,7 @@ typedef enum {
     SYMBOL_SINGLE_QUOTE,
     SYMBOL_BACK_QUOTE,
     SYMBOL_DOUBLE_QUOTE,
+    SYMBOL_PIPE,
     SYMBOL_MAX
 } Symbol;
 
@@ -95,14 +96,16 @@ typedef enum {
     LEXER_EOF,
     LEXER_INTERNAL_ERROR,
     LEXER_UNKNOWN_TOKEN,
+    LEXER_INVALID_NUMBER_FORMAT,
     LEXER_MAX
 } LexerStatus;
 
 typedef struct {
     TokenType type;
+    String    tag;
     union {
         gunichar    literal;
-        String      number;
+        mpfr_t      number;
         String      identifier;
         String      string;
         MathOp      math_op;
@@ -126,7 +129,13 @@ typedef struct {
 
 void        lexer_clear(Lexer *lexer);
 void        lexer_init(Lexer *lexer, String *code);
-LexerStatus lexer_load_next(Lexer *lexer);
+LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace);
+
+#define lexer_load_next(lexer) \
+    lexer_base_load_next(lexer, false)
+
+#define lexer_load_next_skip_whitespace(lexer) \
+    lexer_base_load_next(lexer, true)
 
 #endif
 

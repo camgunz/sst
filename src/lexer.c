@@ -4,7 +4,10 @@
 #include <string.h>
 
 #include <glib.h>
+#include <gmp.h>
+#include <mpfr.h>
 
+#include "config.h"
 #include "utils.h"
 #include "str.h"
 #include "lexer.h"
@@ -14,7 +17,7 @@ const gunichar MathOpValues[MATHOP_MAX] = {
 };
 
 const gunichar SymbolValues[SYMBOL_MAX] = {
-    '(', ')', '[', ']', ',', '.', '\'', '`', '"'
+    '(', ')', '[', ']', ',', '.', '\'', '`', '"', '|'
 };
 
 const gunichar WhitespaceValues[WHITESPACE_MAX] = {
@@ -30,6 +33,7 @@ const char *KeywordValues[KEYWORD_MAX] = {
 void lexer_clear(Lexer *lexer) {
     string_clear(&lexer->code);
     lexer->token.type = TOKEN_UNKNOWN;
+    string_clear(&lexer->token.tag);
 }
 
 void lexer_init(Lexer *lexer, String *code) {
@@ -39,20 +43,41 @@ void lexer_init(Lexer *lexer, String *code) {
     lexer->code.len = code->len;
 }
 
-LexerStatus lexer_load_next(Lexer *lexer) {
+LexerStatus base_lexer_load_next(Lexer *lexer, bool skip_whitespace) {
     String buf;
     gunichar uc;
 
-    if (string_empty(&lexer->code)) {
-        return LEXER_EOF;
+    while (true) {
+        if (string_empty(&lexer->code)) {
+            return LEXER_EOF;
+        }
+
+        if (!string_pop_char(&lexer->code, &uc)) {
+            return LEXER_EOF;
+        }
+
+        bool found_whitespace = false;
+
+        for (Whitespace ws = WHITESPACE_FIRST; ws < WHITESPACE_SPACE; ws++) {
+            if (uc == WhitespaceValues[ws]) {
+                lexer->token.type = TOKEN_WHITESPACE;
+                lexer->token.as.whitespace = ws;
+                found_whitespace = true;
+                break;
+            }
+        }
+
+        if (!found_whitespace) {
+            break;
+        }
+
+        if (!skip_whitespace) {
+            return LEXER_OK;
+        }
     }
 
     buf.data = lexer->code.data;
     buf.len = 0;
-
-    if (!string_pop_char(&lexer->code, &uc)) {
-        return LEXER_EOF;
-    }
 
     if (uc == '-' || g_unichar_isdigit(uc)) {
         bool found_at_least_one_digit = false;
@@ -88,11 +113,22 @@ LexerStatus lexer_load_next(Lexer *lexer) {
         }
 
         if (found_at_least_one_digit) {
+            gchar *resume;
+
             buf.len = lexer->code.data - buf.data;
             lexer->token.type = TOKEN_NUMBER;
-            lexer->token.as.number.data = buf.data;
-            lexer->token.as.number.len = buf.len;
-            lexer->code.len -= buf.len;
+            mpfr_init2(lexer->token.as.number, DEFAULT_PRECISION);
+
+            mpfr_strtofr(
+                lexer->token.as.number, buf.data, &resume, 0, MPFR_RNDZ
+            );
+
+            if (resume == buf.data) {
+                return LEXER_INVALID_NUMBER_FORMAT;
+            }
+
+            lexer->code.data = resume;
+            lexer->code.len -= resume - buf.data;
             return LEXER_OK;
         }
     }
@@ -238,14 +274,6 @@ LexerStatus lexer_load_next(Lexer *lexer) {
         if (uc == SymbolValues[s]) {
             lexer->token.type = TOKEN_SYMBOL;
             lexer->token.as.symbol = s;
-            return LEXER_OK;
-        }
-    }
-
-    for (Whitespace ws = WHITESPACE_FIRST; ws < WHITESPACE_SPACE; ws++) {
-        if (uc == WhitespaceValues[ws]) {
-            lexer->token.type = TOKEN_WHITESPACE;
-            lexer->token.as.whitespace = ws;
             return LEXER_OK;
         }
     }

@@ -133,9 +133,10 @@ FOREACH(_component ${GLib_FIND_COMPONENTS})
             )
         ENDIF()
     ELSEIF(${_component} STREQUAL "gio-unix")
-        # gio-unix is compiled as part of the gio library, but the include paths
-        # are separate from the shared glib ones. Since this is currently only used
-        # by WebKitGTK+ we don't go to extraordinary measures beyond pkg-config.
+        # gio-unix is compiled as part of the gio library, but the include
+        # paths are separate from the shared glib ones. Since this is currently
+        # only used by WebKitGTK+ we don't go to extraordinary measures beyond
+        # pkg-config.
         PKG_CHECK_MODULES(GIO_UNIX QUIET gio-unix-2.0)
     ENDIF()
 ENDFOREACH()

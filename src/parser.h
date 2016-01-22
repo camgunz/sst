@@ -7,9 +7,11 @@ typedef String Text;
  * {{ include "path/to/template.html" }}
  */
 typedef struct {
-    String literal;
+    String tag;
     String path;
-} Include;
+} IncludeStatement;
+
+typedef String IdentifierExpression;
 
 /*
  * {{ site.name }}
@@ -33,7 +35,7 @@ typedef struct {
     BoolOp operator;    /* optional */
     String expression1; /* optional */
     String expression2; /* optional */
-} Conditional;
+} ConditionalStatement;
 
 /*
  * {{ for fruit in fruits }}
@@ -45,7 +47,7 @@ typedef struct {
     String block;
     String identifiers;
     String expression;
-} Iteration;
+} IterationStatement;
 
 /*
  * {{ raw }}
@@ -54,14 +56,14 @@ typedef struct {
 typedef struct {
     String literal;
     String block;
-} Raw;
+} RawStatement;
 
 typedef enum {
     PARSER_OK = LEXER_OK,
     PARSER_EOF = LEXER_EOF,
     PARSER_INTERNAL_ERROR = LEXER_INTERNAL_ERROR,
     PARSER_UNKNOWN_TOKEN = LEXER_UNKNOWN_TOKEN,
-    PARSER_UNEXPECTED_CLOSE_PARENTHESIS,
+    PARSER_UNEXPECTED_TOKEN,
     PARSER_MAX
 } ParserStatus;
 
@@ -88,13 +90,15 @@ typedef struct {
 } Block;
 
 typedef struct {
-    Lexer   lexer;
-    size_t  parenthesis_level;
-    size_t  bracket_level;
-    size_t  brace_level;
-    GArray *blocks;
+    Splitter splitter;
+    Lexer    lexer;
+    size_t   parenthesis_level;
+    size_t   bracket_level;
+    size_t   brace_level;
+    GArray  *tokens;
 } Parser;
 
+void         parser_init(Parser *parser, String *code);
 ParserStatus parser_validate(Parser *parser);
 
 #endif
