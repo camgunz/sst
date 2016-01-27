@@ -5,6 +5,11 @@
 
 #include "str.h"
 
+void string_assign(String *s, gchar *gs) {
+    s->data = gs;
+    s->len = strlen(gs);
+}
+
 void string_clear(String *s) {
     s->data = NULL;
     s->len = 0;

@@ -15,6 +15,62 @@
 
 #define TOKEN_ALLOC_COUNT 1000
 
+static ParserStatus parse_include(Parser *parser) {
+    ParserStatus ps;
+    LexerStatus  ls;
+
+    ls = lexer_load_next_skip_whitespace(&parser->lexer);
+
+    if (ls != LEXER_OK) {
+        return ls;
+    }
+
+    if (parser->lexer.token.type != TOKEN_STRING) {
+        return PARSER_UNEXPECTED_TOKEN;
+    }
+
+    parser->block.type = BLOCK_INCLUDE;
+    string_copy(
+        &parser->block.as.include.tag,
+        &parser->splitter.section
+    );
+    string_copy(
+        &parser->block.as.include.path,
+        &parser->lexer.token.as.string
+    );
+
+    return PARSER_OK;
+}
+
+static ParserStatus parse_conditional(Parser *parser) {
+    /* {{ if person.age >= 18 }} */
+    /* {{ if name == "hey there" }} */
+    /* {{ if width + margin > limit }} */
+    /* {{ expression, boolop, expression }} */
+    return PARSER_OK;
+}
+
+static ParserStatus parse_iteration(Parser *parser) {
+    return PARSER_OK;
+}
+
+static ParserStatus validate_raw(Parser *parser) {
+    return PARSER_OK;
+}
+
+static ParserStatus parse_math_expression(Parser *parser) {
+    return PARSER_OK;
+}
+
+static ParserStatus parse_expression(Parser *parser) {
+    /* Could also be a math expression, depends on finding a math operator */
+    return PARSER_OK;
+}
+
+static ParserStatus parse_paren(Parser *parser) {
+    return PARSER_OK;
+}
+
 static ParserStatus parse_code(Parser *parser) {
     ParserStatus ps;
     LexerStatus  ls;
@@ -77,6 +133,9 @@ static ParserStatus parse_code(Parser *parser) {
                 case SYMBOL_OPAREN: {
                     return parse_paren(parser);
                 }
+                default: {
+                    break;
+                }
             }
             break;
         }
@@ -93,6 +152,9 @@ static ParserStatus parse_code(Parser *parser) {
                 }
                 case KEYWORD_RAW: {
                     return validate_raw(parser);
+                }
+                default: {
+                    break;
                 }
             }
             break;
@@ -111,10 +173,13 @@ static ParserStatus parse_code(Parser *parser) {
         case TOKEN_BOOLOP:
         case TOKEN_UNARY_BOOLOP:
         case TOKEN_MATHOP:
-        case TOKEN_WHITESPACE: {
-            return PARSER_UNEXPECTED_TOKEN;
+        case TOKEN_WHITESPACE:
+        default: {
+            break;
         }
     }
+
+    return PARSER_UNEXPECTED_TOKEN;
 }
 
 void parser_init(Parser *parser, String *code) {
@@ -151,55 +216,5 @@ ParserStatus parser_load_next(Parser *parser) {
     return PARSER_OK;
 }
 
-static ParserStatus parse_include(Parser *parser) {
-    ParserStatus ps;
-
-    ps = eat_whitespace(parser);
-
-    if (ps != PARSER_OK) {
-        return ps;
-    }
-
-    if (parser->lexer.token.type != TOKEN_STRING) {
-        return PARSER_UNEXPECTED_TOKEN;
-    }
-
-    parser->block.type = BLOCK_INCLUDE;
-    string_copy(
-        &parser->block.as.include.tag,
-        &parser->splitter.section
-    );
-    string_copy(
-        &parser->block.as.include.path,
-        parser->lexer.token.as.string
-    );
-
-    return PARSER_OK;
-}
-
-static ParserStatus parse_conditional(Parser *parser) {
-    /* {{ if person.age >= 18 }} */
-    /* {{ if name == "hey there" }} */
-    /* {{ if width + margin > limit }} */
-    /* {{ expression, boolop, expression }} */
-    return PARSER_OK;
-}
-
-static ParserStatus parse_iteration(Parser *parser) {
-    return PARSER_OK;
-}
-
-static ParserStatus validate_raw(Parser *parser) {
-    return PARSER_OK;
-}
-
-static ParserStatus parse_math_expression(Parser *parser) {
-    return PARSER_OK;
-}
-
-static ParserStatus parse_expression(Parser *parser) {
-    /* Could also be a math expression, depends on finding a math operator */
-    return PARSER_OK;
-}
 /* vi: set et ts=4 sw=4: */
 

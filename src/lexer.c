@@ -43,7 +43,7 @@ void lexer_init(Lexer *lexer, String *code) {
     lexer->code.len = code->len;
 }
 
-LexerStatus base_lexer_load_next(Lexer *lexer, bool skip_whitespace) {
+LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     String buf;
     gunichar uc;
 

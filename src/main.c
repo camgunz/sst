@@ -4,7 +4,7 @@
 #include <glib/gprintf.h>
 
 int main(void) {
-    g_printf("Hello there, not quite done yet!\n");
+    g_printf("Not quite ready yet\n");
 
     return EXIT_SUCCESS;
 }

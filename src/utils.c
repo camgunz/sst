@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -53,5 +54,13 @@ bool empty_string(gchar *data) {
     }
 
     return false;
+}
+
+char* _strdup(const char *s) {
+    char *s2 = calloc(strlen(s) + 1, sizeof(char));
+
+    strcpy(s2, s);
+
+    return s2;
 }
 

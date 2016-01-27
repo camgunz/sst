@@ -6,6 +6,7 @@ typedef struct {
     gsize  len;
 } String;
 
+void   string_assign(String *s, gchar *gs);
 void   string_clear(String *s);
 bool   string_empty(String *s);
 bool   string_equals(String *s, const gchar *cs);
