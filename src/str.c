@@ -88,7 +88,7 @@ static bool advance_to_next_char(String *s) {
         return false;
     }
 
-    s->len = s2 - s->data;
+    s->len -= s2 - s->data;
 
     if (s->len == 0) {
         string_clear(s);

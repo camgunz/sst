@@ -10,10 +10,18 @@
 #include "config.h"
 #include "str.h"
 #include "utils.h"
+#include "splitter.h"
 #include "value.h"
 
 #define NUMBER1 "82349023489234902342323419041892349034189341.143"
 #define NUMBER2 "9378334023462303455668934502028340345.2890383143"
+
+#define TEMPLATE \
+"{{ include '/srv/http/templates/header.tmpl' }}\n" \
+"<html>\n"                                          \
+"<head>\n"                                          \
+"<title>{{ page.title }}</title>\n"
+
 
 void test_mpfr(void) {
     mpfr_t n;
@@ -49,9 +57,62 @@ void test_add(void) {
     g_printf("Result: %s + %s = %s\n", NUMBER1, NUMBER2, result);
 }
 
+void test_splitter(void) {
+    Splitter splitter;
+
+    splitter_init(&splitter, TEMPLATE);
+
+    while (splitter_load_next(&splitter)) {
+        g_printf("Section - is_code: %u\n", splitter.section_is_code);
+        if (splitter.section_is_code) {
+            char *code = strndup(splitter.section.data, splitter.section.len);
+
+            g_printf("Code: [%s]\n", code);
+        }
+    }
+}
+
+void test_string(void) {
+    String s;
+    char *cs = strdup(NUMBER1);
+    gunichar uc;
+
+    string_assign(&s, cs);
+    g_printf("Equals: %u\n", string_equals(&s, cs));
+    g_printf("Starts with 8234: %u\n", string_starts_with(&s, "8234"));
+    g_printf("String length: %u\n", s.len);
+
+    string_first_char(&s, &uc);
+    g_printf("First char: %c\n", uc);
+
+    uc = 0;
+
+    string_pop_char(&s, &uc);
+    g_printf("Popped first char: %c\n", uc);
+    g_printf("String length: %u\n", s.len);
+
+    g_printf("Second char is '2': %u\n", string_first_char_equals(&s, '2'));
+
+    string_pop_char_if_equals(&s, '2');
+    g_printf("Second char: %u\n", string_first_char_equals(&s, '2'));
+    g_printf("String length: %u\n", s.len);
+
+    string_pop_char_if_digit(&s, &uc);
+    g_printf("Third char: %c\n", uc);
+    g_printf("String length: %u\n", s.len);
+
+    string_pop_char_if_alnum(&s, &uc);
+    g_printf("Fourth char: %c\n", uc);
+    g_printf("String length: %u\n", s.len);
+
+    g_printf("Find 0: %s\n", string_find(&s, '0'));
+}
+
 int main(void) {
     test_mpfr();
     test_add();
+    test_splitter();
+    test_string();
 
     return EXIT_SUCCESS;
 }

@@ -22,30 +22,21 @@ static gchar* find_next_code_tag_start(gchar *data) {
         if (next_char_equals(open, '{')) {
             return open;
         }
+
+        open = g_utf8_next_char(open);
     }
 }
 
 static bool find_next_code_tag(gchar *data, String *tag) {
-    gchar *open = data;
+    gchar *open = find_next_code_tag_start(data);
     gchar *cursor = NULL;
-    gchar *close = NULL;
     gunichar in_string = '\0';
 
-    while (true) {
-        open = find_next(open, '{');
-
-        if (!open) {
-            return NULL;
-        }
-
-        cursor = next_char_equals(open, '{');
-
-        if (cursor) {
-            break;
-        }
+    if (!open) {
+        return false;
     }
 
-    cursor = g_utf8_next_char(cursor);
+    cursor = g_utf8_next_char(data);
 
     while (!empty_string(cursor)) {
         gunichar uc = g_utf8_get_char(cursor);
@@ -53,51 +44,64 @@ static bool find_next_code_tag(gchar *data, String *tag) {
         switch (uc) {
             case '\'': {
                 switch (in_string) {
-                    case '\0':
+                    case '\0': {
                         in_string = '\'';
                         break;
-                    case '\'':
+                    }
+                    case '\'': {
                         in_string = '\0';
                         break;
+                    }
                 }
                 break;
             }
             case '`': {
                 switch (in_string) {
-                    case '\0':
+                    case '\0': {
                         in_string = '`';
                         break;
-                    case '`':
+                    }
+                    case '`': {
                         in_string = '\0';
                         break;
+                    }
                 }
                 break;
             }
             case '"': {
                 switch (in_string) {
-                    case '\0':
+                    case '\0': {
                         in_string = '"';
                         break;
-                    case '"':
+                    }
+                    case '"': {
                         in_string = '\0';
                         break;
+                    }
                 }
                 break;
             }
             case '}': {
-                if (in_string == '\0') {
-                    close = next_char_equals(cursor, '}');
-
-                    if (close) {
-                        close = g_utf8_next_char(close);
-                    }
-
-                    tag->len = close - open;
-
-                    return true;
+                if (in_string != '\0') {
+                    break;
                 }
+
+                gchar *next = delete_char(cursor);
+
+                gunichar uc = g_utf8_get_char(cursor);
+
+                if (uc != '}') {
+                    cursor = next;
+                    break;
+                }
+
+                tag->data = open;
+                tag->len = (next - open) + 1;
+
+                return true;
             }
         }
+        cursor = g_utf8_next_char(cursor);
     }
 
     return false;
