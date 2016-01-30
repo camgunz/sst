@@ -120,6 +120,7 @@ typedef struct {
 extern const gunichar  MathOpValues[MATHOP_MAX];
 extern const gunichar  SymbolValues[SYMBOL_MAX];
 extern const gunichar  WhitespaceValues[WHITESPACE_MAX];
+extern const char     *BoolOpValues[BOOLOP_MAX];
 extern const char     *KeywordValues[KEYWORD_MAX];
 
 typedef struct {
@@ -128,7 +129,7 @@ typedef struct {
 } Lexer;
 
 void        lexer_clear(Lexer *lexer);
-void        lexer_init(Lexer *lexer, String *code);
+void        lexer_set_code(Lexer *lexer, String *code);
 LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace);
 
 #define lexer_load_next(lexer) \

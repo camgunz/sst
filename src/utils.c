@@ -6,20 +6,8 @@
 
 #include <glib.h>
 
-char* _strdup(const char *s) {
-    char *s2 = calloc(strlen(s) + 1, sizeof(char));
-
-    strcpy(s2, s);
-
-    return s2;
-}
-
-char* _strndup(const char *s, size_t size) {
-    char *s2 = calloc(size + 1, sizeof(char));
-
-    strncpy(s2, s, size);
-
-    return s2;
+char* chardup(gunichar uc) {
+    return g_strdup_printf("%c", uc);
 }
 
 void die(const char *format, ...) {

@@ -24,9 +24,13 @@ const gunichar WhitespaceValues[WHITESPACE_MAX] = {
     ' ', '\t', '\r', '\n',
 };
 
+const char *BoolOpValues[BOOLOP_MAX] = {
+    "==", "!=", ">", ">=", "<", "<=", "&&", "||"
+};
+
 const char *KeywordValues[KEYWORD_MAX] = {
-    "include" "if", "elif", "else", "endif", "for", "in", "endfor", "raw",
-    "endraw",
+    "include", "if", "elif", "else", "endif", "for", "in", "endfor", "raw",
+    "endraw", "range"
 };
 
 
@@ -36,16 +40,22 @@ void lexer_clear(Lexer *lexer) {
     string_clear(&lexer->token.tag);
 }
 
-void lexer_init(Lexer *lexer, String *code) {
+void lexer_set_code(Lexer *lexer, String *code) {
     lexer_clear(lexer);
 
+    string_advance_char(code);
+    string_advance_char(code);
+
     lexer->code.data = code->data;
-    lexer->code.len = code->len;
+    lexer->code.len = code->len - 2;
 }
 
 LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     String buf;
     gunichar uc;
+
+    buf.data = lexer->code.data;
+    buf.len = 0;
 
     while (true) {
         if (string_empty(&lexer->code)) {
@@ -58,7 +68,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
 
         bool found_whitespace = false;
 
-        for (Whitespace ws = WHITESPACE_FIRST; ws < WHITESPACE_SPACE; ws++) {
+        for (Whitespace ws = WHITESPACE_FIRST; ws < WHITESPACE_MAX; ws++) {
             if (uc == WhitespaceValues[ws]) {
                 lexer->token.type = TOKEN_WHITESPACE;
                 lexer->token.as.whitespace = ws;
@@ -76,12 +86,13 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         }
     }
 
-    buf.data = lexer->code.data;
-    buf.len = 0;
-
     if (uc == '-' || g_unichar_isdigit(uc)) {
         bool found_at_least_one_digit = false;
         bool found_period = false;
+
+        if (uc == '.') {
+            found_period = true;
+        }
 
         while (true) {
             gunichar nuc;
@@ -134,7 +145,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     }
 
     if (g_unichar_isalnum(uc)) {
-        while (string_pop_char_if_alnum(&lexer->code, NULL)) {
+        while (string_pop_char_if_identifier(&lexer->code, NULL)) {
         }
 
         buf.len = lexer->code.data - buf.data;
@@ -150,7 +161,6 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         lexer->token.type = TOKEN_IDENTIFIER;
         lexer->token.as.identifier.data = buf.data;
         lexer->token.as.identifier.len = buf.len;
-        lexer->code.len -= buf.len;
         return LEXER_OK;
     }
 

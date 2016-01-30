@@ -76,7 +76,7 @@ bool string_first_char(String *s, gunichar *uc) {
     return true;
 }
 
-static bool advance_to_next_char(String *s) {
+bool string_advance_char(String *s) {
     gchar *s2 = g_utf8_next_char(s->data);
 
     if (!s2) {
@@ -109,7 +109,7 @@ bool string_pop_char(String *s, gunichar *uc) {
         *uc = g_utf8_get_char(s->data);
     }
 
-    return advance_to_next_char(s);
+    return string_advance_char(s);
 }
 
 bool string_first_char_equals(String *s, gunichar uc) {
@@ -127,7 +127,7 @@ bool string_pop_char_if_equals(String *s, gunichar uc) {
         return false;
     }
 
-    return advance_to_next_char(s);
+    return string_advance_char(s);
 }
 
 bool string_pop_char_if_digit(String *s, gunichar *uc) {
@@ -145,7 +145,7 @@ bool string_pop_char_if_digit(String *s, gunichar *uc) {
         *uc = uc2;
     }
 
-    return advance_to_next_char(s);
+    return string_advance_char(s);
 }
 
 bool string_pop_char_if_alnum(String *s, gunichar *uc) {
@@ -163,7 +163,33 @@ bool string_pop_char_if_alnum(String *s, gunichar *uc) {
         *uc = uc2;
     }
 
-    return advance_to_next_char(s);
+    return string_advance_char(s);
+}
+
+bool string_pop_char_if_identifier(String *s, gunichar *uc) {
+    if (string_empty(s)) {
+        return false;
+    }
+
+    gunichar uc2 = g_utf8_get_char(s->data);
+
+    switch (uc2) {
+        case '.':
+        case '_':
+            return string_advance_char(s);
+        default:
+            break;
+    }
+
+    if (!g_unichar_isalnum(uc2)) {
+        return false;
+    }
+
+    if (uc) {
+        *uc = uc2;
+    }
+
+    return string_advance_char(s);
 }
 
 gchar* string_find(String *s, gunichar uc) {
@@ -177,6 +203,10 @@ gchar* string_find(String *s, gunichar uc) {
 void string_copy(String *dst, String *src) {
     dst->data = src->data;
     dst->len  = src->len;
+}
+
+char* string_to_c_string(String *s) {
+    return g_strndup(s->data, s->len);
 }
 
 /* vi: set et ts=4 sw=4: */
