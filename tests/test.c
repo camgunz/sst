@@ -1,9 +1,9 @@
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <glib.h>
-#include <glib/gprintf.h>
 #include <gmp.h>
 #include <mpfr.h>
 
@@ -43,43 +43,43 @@ void test_mpfr(void) {
     mpfr_init2(n, DEFAULT_PRECISION);
     mpfr_strtofr(n, NUMBER1, NULL, 0, MPFR_RNDZ);
 
-    g_printf("Number: %s\n", mpfr_get_str(NULL, &ep, 10, 0, n, MPFR_RNDZ));
+    printf("Number: %s\n", mpfr_get_str(NULL, &ep, 10, 0, n, MPFR_RNDZ));
 }
 
 void test_string(void) {
     String s;
-    char *cs = g_strdup(NUMBER1);
-    gunichar uc;
+    char *cs = strdup(NUMBER1);
+    uint32_t uc;
 
     string_assign(&s, cs);
-    g_printf("Equals: %u\n", string_equals(&s, cs));
-    g_printf("Starts with 8234: %u\n", string_starts_with(&s, "8234"));
-    g_printf("String length: %u\n", s.len);
+    printf("Equals: %u\n", string_equals(&s, cs));
+    printf("Starts with 8234: %u\n", string_starts_with(&s, "8234"));
+    printf("String length: %u\n", s.len);
 
     string_first_char(&s, &uc);
-    g_printf("First char: %c\n", uc);
+    printf("First char: %c\n", uc);
 
     uc = 0;
 
     string_pop_char(&s, &uc);
-    g_printf("Popped first char: %c\n", uc);
-    g_printf("String length: %u\n", s.len);
+    printf("Popped first char: %c\n", uc);
+    printf("String length: %u\n", s.len);
 
-    g_printf("Second char is '2': %u\n", string_first_char_equals(&s, '2'));
+    printf("Second char is '2': %u\n", string_first_char_equals(&s, '2'));
 
     string_pop_char_if_equals(&s, '2');
-    g_printf("Second char: %u\n", string_first_char_equals(&s, '2'));
-    g_printf("String length: %u\n", s.len);
+    printf("Second char: %u\n", string_first_char_equals(&s, '2'));
+    printf("String length: %u\n", s.len);
 
     string_pop_char_if_digit(&s, &uc);
-    g_printf("Third char: %c\n", uc);
-    g_printf("String length: %u\n", s.len);
+    printf("Third char: %c\n", uc);
+    printf("String length: %u\n", s.len);
 
     string_pop_char_if_alnum(&s, &uc);
-    g_printf("Fourth char: %c\n", uc);
-    g_printf("String length: %u\n", s.len);
+    printf("Fourth char: %c\n", uc);
+    printf("String length: %u\n", s.len);
 
-    g_printf("Find 0: %s\n", string_find(&s, '0'));
+    printf("Find 0: %s\n", string_find(&s, '0'));
 }
 
 void test_add(void) {
@@ -103,7 +103,7 @@ void test_add(void) {
     value_add(&v3, &v1, &v2);
     value_as_string(&result, &v3);
 
-    g_printf("Result: %s + %s = %s\n", NUMBER1, NUMBER2, result);
+    printf("Result: %s + %s = %s\n", NUMBER1, NUMBER2, result);
 }
 
 void test_splitter(void) {
@@ -112,11 +112,11 @@ void test_splitter(void) {
     splitter_init(&splitter, TEMPLATE);
 
     while (splitter_load_next(&splitter)) {
-        g_printf("Section - is_code: %u\n", splitter.section_is_code);
+        printf("Section - is_code: %u\n", splitter.section_is_code);
         if (splitter.section_is_code) {
-            char *code = g_strndup(splitter.section.data, splitter.section.len);
+            char *code = strndup(splitter.section.data, splitter.section.len);
 
-            g_printf("Code: [%s]\n", code);
+            printf("Code: [%s]\n", code);
 
             free(code);
         }
@@ -144,13 +144,13 @@ static char* token_to_string(Token *token) {
             return mpfr_get_str(NULL, &ep, 10, 0, token->as.number, MPFR_RNDZ);
         }
         case TOKEN_KEYWORD:
-            return g_strdup(KeywordValues[token->as.keyword]);
+            return strdup(KeywordValues[token->as.keyword]);
         case TOKEN_IDENTIFIER:
             return string_to_c_string(&token->as.identifier);
         case TOKEN_STRING:
             return string_to_c_string(&token->as.string);
         case TOKEN_BOOLOP:
-            return g_strdup(BoolOpValues[token->as.bool_op]);
+            return strdup(BoolOpValues[token->as.bool_op]);
         case TOKEN_UNARY_BOOLOP:
             return chardup('!');
         case TOKEN_MATHOP:
@@ -160,22 +160,22 @@ static char* token_to_string(Token *token) {
         case TOKEN_WHITESPACE:
             switch (token->as.whitespace) {
                 case WHITESPACE_SPACE:
-                    return g_strdup("<space>");
+                    return strdup("<space>");
                 case WHITESPACE_TAB:
-                    return g_strdup("<tab>");
+                    return strdup("<tab>");
                 case WHITESPACE_CARRIAGE_RETURN:
-                    return g_strdup("<cr>");
+                    return strdup("<cr>");
                 case WHITESPACE_NEWLINE:
-                    return g_strdup("<nl>");
+                    return strdup("<nl>");
                 case WHITESPACE_MAX:
                 default:
-                    return g_strdup("<ws_unknown>");
+                    return strdup("<ws_unknown>");
             }
             break;
         case TOKEN_UNKNOWN:
         case TOKEN_MAX:
         default:
-            return g_strdup("Unknown");
+            return strdup("Unknown");
     }
 }
 
@@ -192,14 +192,14 @@ void test_lexer(void) {
             continue;
         }
 
-        code = g_strndup(splitter.section.data, splitter.section.len);
+        code = strndup(splitter.section.data, splitter.section.len);
 
-        g_printf("Code: [%s]\n", code);
+        printf("Code: [%s]\n", code);
 
         lexer_set_code(&lexer, &splitter.section);
 
         while (lexer_load_next(&lexer) == LEXER_OK) {
-            g_printf("Token: %s [%s]\n",
+            printf("Token: %s [%s]\n",
                 token_types[lexer.token.type], token_to_string(&lexer.token)
             );
         }

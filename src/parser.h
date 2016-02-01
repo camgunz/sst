@@ -95,7 +95,7 @@ typedef struct {
     size_t    parenthesis_level;
     size_t    bracket_level;
     size_t    brace_level;
-    GArray   *tokens;
+    Array    *tokens;
     Block     block;
 } Parser;
 

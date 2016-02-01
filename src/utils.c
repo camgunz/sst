@@ -4,10 +4,38 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <glib.h>
+#include <utf8proc.h>
 
-char* chardup(gunichar uc) {
-    return g_strdup_printf("%c", uc);
+#include "config.h"
+
+char* _strndup(const char *cs, size_t maxlen) {
+    size_t requested_size = maxlen + 1;
+    char *s = malloc(requested_size * sizeof(char));
+
+    strncpy(s, cs, requested_size);
+
+    return s;
+}
+
+char* _strdup(const char *cs) {
+    return strndup(cs, strlen(cs));
+}
+
+char* chardup(rune r) {
+    uint8_t buf[4] = {0};
+    ssize_t bytes_written;
+
+    if (!utf8proc_codepoint_valid(r)) {
+        return NULL;
+    }
+
+    bytes_written = utf8proc_encode_char(r, &buf[0]);
+
+    if (bytes_written < 1) {
+        return NULL;
+    }
+
+    return strndup(&buf[0], bytes_written);
 }
 
 void die(const char *format, ...) {
@@ -18,51 +46,5 @@ void die(const char *format, ...) {
     va_end(args);
 
     exit(EXIT_FAILURE);
-}
-
-bool empty_string(gchar *data) {
-    if (!data) {
-        return true;
-    }
-
-    if ((*data) == '\0') {
-        return true;
-    }
-
-    return false;
-}
-
-gchar* find_next(gchar *data, gunichar c) {
-    for (gchar *s = data; !empty_string(s); s = g_utf8_next_char(s)) {
-        if (g_utf8_get_char(s) == c) {
-            return s;
-        }
-    }
-
-    return NULL;
-}
-
-bool next_char_equals(gchar *data, gunichar c) {
-    gchar *next = g_utf8_next_char(data);
-
-    if (empty_string(next)) {
-        return false;
-    }
-
-    if (g_utf8_get_char(next) != c) {
-        return false;
-    }
-
-    return true;
-}
-
-gchar* delete_char(gchar *data) {
-    gchar *next = g_utf8_next_char(data);
-
-    if (empty_string(next)) {
-        return NULL;
-    }
-
-    return next;
 }
 

@@ -1,9 +1,9 @@
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-#include <glib.h>
 #include <gmp.h>
 #include <mpfr.h>
 
@@ -12,15 +12,15 @@
 #include "str.h"
 #include "lexer.h"
 
-const gunichar MathOpValues[MATHOP_MAX] = {
+const uint32_t MathOpValues[MATHOP_MAX] = {
     '+', '-', '*', '/', '%', '^',
 };
 
-const gunichar SymbolValues[SYMBOL_MAX] = {
-    '(', ')', '[', ']', ',', '.', '\'', '`', '"', '|'
+const uint32_t SymbolValues[SYMBOL_MAX] = {
+    '(', ')', '[', ']', '{', '}', ',', '.', '\'', '`', '"', '|'
 };
 
-const gunichar WhitespaceValues[WHITESPACE_MAX] = {
+const uint32_t WhitespaceValues[WHITESPACE_MAX] = {
     ' ', '\t', '\r', '\n',
 };
 
@@ -33,43 +33,147 @@ const char *KeywordValues[KEYWORD_MAX] = {
     "endraw", "range"
 };
 
+static bool seek_to_next_code_tag_start(String *s) {
+    String cursor;
+    StringStatus res;
 
-void lexer_clear(Lexer *lexer) {
-    string_clear(&lexer->code);
-    lexer->token.type = TOKEN_UNKNOWN;
-    string_clear(&lexer->token.tag);
+    string_shallow_copy(&cursor, s);
+
+    while (true) {
+        if (string_starts_with(&cursor, "{{")) {
+            break;
+        }
+
+        if (string_advance_rune(&cursor) != STRING_OK) {
+            return false;
+        }
+    }
+
+    string_shallow_copy(s, &cursor);
+
+    return true;
 }
 
-void lexer_set_code(Lexer *lexer, String *code) {
+static bool find_next_code_tag(String *data, String *tag) {
+    String tag2;
+    char *open;
+
+    string_shallow_copy(&tag2, data);
+
+    if (!seek_to_next_code_tag_start(&tag2)) {
+        return false;
+    }
+
+    open = tag2.data;
+
+    while (true) {
+        StringStatus res;
+        rune in_string = '\0';
+        rune r;
+
+        res = string_pop_rune(&tag2, &r);
+
+        if (res != STRING_OK) {
+            return false;
+        }
+
+        switch (r) {
+            case '\'': {
+                switch (in_string) {
+                    case '\0': {
+                        in_string = '\'';
+                        break;
+                    }
+                    case '\'': {
+                        in_string = '\0';
+                        break;
+                    }
+                }
+                break;
+            }
+            case '`': {
+                switch (in_string) {
+                    case '\0': {
+                        in_string = '`';
+                        break;
+                    }
+                    case '`': {
+                        in_string = '\0';
+                        break;
+                    }
+                }
+                break;
+            }
+            case '"': {
+                switch (in_string) {
+                    case '\0': {
+                        in_string = '"';
+                        break;
+                    }
+                    case '"': {
+                        in_string = '\0';
+                        break;
+                    }
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+
+        if ((in_string == '\0') && string_starts_with(&tag2, "}}")) {
+            if (string_advance_rune(&tag2) != STRING_OK) {
+                return false;
+            }
+
+            if (string_advance_rune(&tag2) != STRING_OK) {
+                return false;
+            }
+
+            tag2.len = tag.data - open;
+            tag2.data = open;
+
+            string_shallow_copy(tag, &tag2);
+
+            return true;
+        }
+    }
+}
+
+void lexer_clear(Lexer *lexer) {
+    string_clear(&lexer->data);
+    string_clear(&lexer->tag);
+    lexer->token.type = TOKEN_UNKNOWN;
+}
+
+void lexer_set_data(Lexer *lexer, String *data) {
     lexer_clear(lexer);
 
-    string_advance_char(code);
-    string_advance_char(code);
-
-    lexer->code.data = code->data;
-    lexer->code.len = code->len - 2;
+    string_shallow_copy(&lexer->data, data);
 }
 
 LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     String buf;
-    gunichar uc;
+    rune r;
+    StringStatus res;
 
     buf.data = lexer->code.data;
     buf.len = 0;
 
     while (true) {
         if (string_empty(&lexer->code)) {
-            return LEXER_EOF;
+            return LEXER_END;
         }
 
-        if (!string_pop_char(&lexer->code, &uc)) {
-            return LEXER_EOF;
+        if (!string_pop_char(&lexer->code, &r)) {
+            return LEXER_END;
         }
 
         bool found_whitespace = false;
 
         for (Whitespace ws = WHITESPACE_FIRST; ws < WHITESPACE_MAX; ws++) {
-            if (uc == WhitespaceValues[ws]) {
+            if (r == WhitespaceValues[ws]) {
                 lexer->token.type = TOKEN_WHITESPACE;
                 lexer->token.as.whitespace = ws;
                 found_whitespace = true;
@@ -86,33 +190,33 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         }
     }
 
-    if (uc == '-' || g_unichar_isdigit(uc)) {
+    if (rune_is_digit(r) || r == '-' || r == '.') {
         bool found_at_least_one_digit = false;
         bool found_period = false;
 
-        if (uc == '.') {
+        if (r == '.') {
             found_period = true;
         }
 
         while (true) {
-            gunichar nuc;
+            rune r2;
 
-            if (!string_first_char(&lexer->code, &nuc)) {
-                return LEXER_EOF;
+            if (!string_first_char(&lexer->code, &r2)) {
+                return LEXER_END;
             }
 
-            if (g_unichar_isdigit(nuc)) {
+            if (rune_is_digit(r2)) {
                 found_at_least_one_digit = true;
                 string_pop_char(&lexer->code, NULL);
                 continue;
             }
 
-            if (nuc == ',') {
+            if (r2 == ',') {
                 string_pop_char(&lexer->code, NULL);
                 continue;
             }
 
-            if (nuc == '.') {
+            if (r2 == '.') {
                 if (!found_period) {
                     found_period = true;
                     string_pop_char(&lexer->code, NULL);
@@ -124,9 +228,8 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         }
 
         if (found_at_least_one_digit) {
-            gchar *resume;
+            char *resume;
 
-            buf.len = lexer->code.data - buf.data;
             lexer->token.type = TOKEN_NUMBER;
             mpfr_init2(lexer->token.as.number, DEFAULT_PRECISION);
 
@@ -138,66 +241,69 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
                 return LEXER_INVALID_NUMBER_FORMAT;
             }
 
-            lexer->code.data = resume;
-            lexer->code.len -= resume - buf.data;
-            return LEXER_OK;
+            return string_advance_bytes(resume - buf.data);
         }
     }
 
-    if (g_unichar_isalnum(uc)) {
-        while (string_pop_char_if_identifier(&lexer->code, NULL)) {
+    if (rune_is_alpha(r) || r == '_') {
+        res = string_truncate_at_whitespace(&buf);
+
+        if (res != STRING_OK) {
+            return res;
         }
 
-        buf.len = lexer->code.data - buf.data;
+        if (!validate_identifier(&buf)) {
+            return LEXER_INVALID_IDENTIFIER_FORMAT;
+        }
 
         for (Keyword kw = KEYWORD_FIRST; kw < KEYWORD_MAX; kw++) {
             if (string_equals(&buf, KeywordValues[kw])) {
                 lexer->token.type = TOKEN_KEYWORD;
                 lexer->token.as.keyword = kw;
+
                 return LEXER_OK;
             }
         }
 
         lexer->token.type = TOKEN_IDENTIFIER;
-        lexer->token.as.identifier.data = buf.data;
-        lexer->token.as.identifier.len = buf.len;
+        string_shallow_copy(&lexer->token.as.identifier, &buf);
+
         return LEXER_OK;
     }
 
-    if (uc == '\'' || uc == '`' || uc == '"') {
-        gchar *string_start = buf.data;
-        gchar *string_end = string_find(&lexer->code, uc);
+    if (r == '\'' || r == '`' || r == '"') {
+        res = string_truncate_at(&buf, r);
 
-        if (!string_end) {
-            return LEXER_EOF;
+        switch (res) {
+            case STRING_END:
+            case STRING_MEMORY_EXHAUSTED:
+            case STRING_NOT_ASSIGNED:
+            case STRING_INVALID_OPTS: {
+                return res;
+            }
+            default: {
+                break;
+            }
         }
 
-        string_start = g_utf8_next_char(string_start);
+        res = string_truncate_runes(&buf, 1);
 
-        if (!string_start) {
-            return LEXER_EOF;
-        }
-
-        if (string_start > string_end) {
-            return LEXER_INTERNAL_ERROR;
+        switch (res) {
+            case STRING_END:
+            case STRING_MEMORY_EXHAUSTED:
+            case STRING_NOT_ASSIGNED:
+            case STRING_INVALID_OPTS: {
+                return res;
+            }
+            default: {
+                break;
+            }
         }
 
         lexer->token.type = TOKEN_STRING;
-        lexer->token.as.string.data = string_start;
-        lexer->token.as.string.len = string_end - string_start;
+        string_shallow_copy(&lexer->token.as.string, &buf);
 
-        string_end = g_utf8_next_char(string_end);
-
-        if (!string_end) {
-            lexer->code.data = NULL;
-            lexer->code.len = 0;
-        }
-        else {
-            lexer->code.data = string_end;
-            lexer->code.len -= buf.data - string_end;
-        }
-
-        return LEXER_OK;
+        return string_advance_bytes(&lexer->data, buf.len + 1);
     }
 
     if (uc == '=') {

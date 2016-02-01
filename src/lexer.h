@@ -18,6 +18,8 @@ typedef enum {
     SYMBOL_CPAREN,
     SYMBOL_OBRACKET,
     SYMBOL_CBRACKET,
+    SYMBOL_OBRACE,
+    SYMBOL_CBRACE,
     SYMBOL_COMMA,
     SYMBOL_PERIOD,
     SYMBOL_SINGLE_QUOTE,
@@ -79,6 +81,7 @@ typedef enum {
 
 typedef enum {
     TOKEN_UNKNOWN,
+    TOKEN_TEXT,
     TOKEN_NUMBER,
     TOKEN_KEYWORD,
     TOKEN_IDENTIFIER,
@@ -92,9 +95,13 @@ typedef enum {
 } TokenType;
 
 typedef enum {
-    LEXER_OK,
-    LEXER_EOF,
-    LEXER_INTERNAL_ERROR,
+    LEXER_OK = STRING_OK,
+    LEXER_DATA_MEMORY_EXHAUSTED = STRING_MEMORY_EXHAUSTED,
+    LEXER_DATA_OVERFLOW = STRING_OVERFLOW,
+    LEXER_DATA_INVALID_UTF8 = STRING_INVALID_UTF8,
+    LEXER_DATA_NOT_ASSIGNED = STRING_NOT_ASSIGNED,
+    LEXER_DATA_INVALID_OPTS = STRING_INVALID_OPTS,
+    LEXER_END = STRING_END,
     LEXER_UNKNOWN_TOKEN,
     LEXER_INVALID_NUMBER_FORMAT,
     LEXER_MAX
@@ -102,9 +109,9 @@ typedef enum {
 
 typedef struct {
     TokenType type;
-    String    tag;
     union {
-        gunichar    literal;
+        String      text;
+        rune        literal;
         mpfr_t      number;
         String      identifier;
         String      string;
@@ -117,19 +124,20 @@ typedef struct {
     } as;
 } Token;
 
-extern const gunichar  MathOpValues[MATHOP_MAX];
-extern const gunichar  SymbolValues[SYMBOL_MAX];
-extern const gunichar  WhitespaceValues[WHITESPACE_MAX];
-extern const char     *BoolOpValues[BOOLOP_MAX];
-extern const char     *KeywordValues[KEYWORD_MAX];
+extern const rune  MathOpValues[MATHOP_MAX];
+extern const rune  SymbolValues[SYMBOL_MAX];
+extern const rune  WhitespaceValues[WHITESPACE_MAX];
+extern const char *BoolOpValues[BOOLOP_MAX];
+extern const char *KeywordValues[KEYWORD_MAX];
 
 typedef struct {
-    String code;
+    String data;
+    String tag;
     Token  token;
 } Lexer;
 
 void        lexer_clear(Lexer *lexer);
-void        lexer_set_code(Lexer *lexer, String *code);
+void        lexer_set_data(Lexer *lexer, String *data);
 LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace);
 
 #define lexer_load_next(lexer) \
