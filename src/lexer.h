@@ -1,6 +1,8 @@
 #ifndef LEXER_H__
 #define LEXER_H__
 
+#define TOKEN_QUEUE_SIZE 3
+
 typedef enum {
     MATHOP_ADD,
     MATHOP_SUBTRACT,
@@ -95,13 +97,13 @@ typedef enum {
 } TokenType;
 
 typedef enum {
-    LEXER_OK = STRING_OK,
-    LEXER_DATA_MEMORY_EXHAUSTED = STRING_MEMORY_EXHAUSTED,
-    LEXER_DATA_OVERFLOW = STRING_OVERFLOW,
-    LEXER_DATA_INVALID_UTF8 = STRING_INVALID_UTF8,
-    LEXER_DATA_NOT_ASSIGNED = STRING_NOT_ASSIGNED,
-    LEXER_DATA_INVALID_OPTS = STRING_INVALID_OPTS,
-    LEXER_END = STRING_END,
+    LEXER_OK                    = SSLICE_OK,
+    LEXER_DATA_MEMORY_EXHAUSTED = SSLICE_MEMORY_EXHAUSTED,
+    LEXER_DATA_OVERFLOW         = SSLICE_OVERFLOW,
+    LEXER_DATA_INVALID_UTF8     = SSLICE_INVALID_UTF8,
+    LEXER_DATA_NOT_ASSIGNED     = SSLICE_NOT_ASSIGNED,
+    LEXER_DATA_INVALID_OPTS     = SSLICE_INVALID_OPTS,
+    LEXER_END                   = SSLICE_END,
     LEXER_UNKNOWN_TOKEN,
     LEXER_INVALID_NUMBER_FORMAT,
     LEXER_MAX
@@ -110,17 +112,17 @@ typedef enum {
 typedef struct {
     TokenType type;
     union {
-        String      text;
-        rune        literal;
-        mpfr_t      number;
-        String      identifier;
-        String      string;
-        MathOp      math_op;
-        Symbol      symbol;
-        Whitespace  whitespace;
-        UnaryBoolOp unary_bool_op;
-        BoolOp      bool_op;
-        Keyword     keyword;
+        SSlice       text;
+        rune         literal;
+        mpd_t       *number;
+        SSlice       identifier;
+        SSlice       string;
+        MathOp       math_op;
+        Symbol       symbol;
+        Whitespace   whitespace;
+        UnaryBoolOp  unary_bool_op;
+        BoolOp       bool_op;
+        Keyword      keyword;
     } as;
 } Token;
 
@@ -131,14 +133,32 @@ extern const char *BoolOpValues[BOOLOP_MAX];
 extern const char *KeywordValues[KEYWORD_MAX];
 
 typedef struct {
-    String data;
-    String tag;
-    Token  token;
+    uint8_t head;
+    uint8_t tail;
+    Token tokens[TOKEN_QUEUE_SIZE];
+} TokenQueue;
+
+typedef struct {
+    SSlice         data;
+    SSlice         tag;
+    bool           in_raw;
+    TokenQueue     tokens;
+    mpd_context_t  mpd;
 } Lexer;
 
+void        token_queue_clear(TokenQueue *token_queue);
+uint8_t     token_queue_count(TokenQueue *token_queue);
+bool        token_queue_empty(TokenQueue *token_queue);
+bool        token_queue_full(TokenQueue *token_queue);
+bool        token_queue_push(TokenQueue *token_queue, Token *token);
+Token*      token_queue_pop(TokenQueue *token_queue);
+Token*      token_queue_push_new(TokenQueue *token_queue);
+
+void        lexer_init(Lexer *lexer);
 void        lexer_clear(Lexer *lexer);
-void        lexer_set_data(Lexer *lexer, String *data);
+void        lexer_set_data(Lexer *lexer, SSlice *data);
 LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace);
+Token*      lexer_get_current_token(Lexer *lexer);
 
 #define lexer_load_next(lexer) \
     lexer_base_load_next(lexer, false)

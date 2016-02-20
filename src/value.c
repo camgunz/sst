@@ -1,10 +1,10 @@
 #include <stdbool.h>
 
-#include <glib.h>
-#include <gmp.h>
-#include <mpfr.h>
+#include <mpdecimal.h>
+#include <utf8proc.h>
 
 #include "config.h"
+#include "rune.h"
 #include "str.h"
 #include "value.h"
 

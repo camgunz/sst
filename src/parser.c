@@ -4,20 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <glib.h>
-#include <gmp.h>
-#include <mpfr.h>
+#include <mpdecimal.h>
+#include <utf8proc.h>
 
+#include "config.h"
+#include "rune.h"
 #include "str.h"
-#include "splitter.h"
 #include "lexer.h"
 #include "parser.h"
 
 #define TOKEN_ALLOC_COUNT 1000
 
 static ParserStatus parse_include(Parser *parser) {
-    ParserStatus ps;
     LexerStatus  ls;
+    Token       *token;
 
     ls = lexer_load_next_skip_whitespace(&parser->lexer);
 
@@ -25,19 +25,18 @@ static ParserStatus parse_include(Parser *parser) {
         return ls;
     }
 
-    if (parser->lexer.token.type != TOKEN_STRING) {
+    token = lexer_get_current_token(&parser->lexer);
+
+    if (!token) {
+        return PARSER_INTERNAL_ERROR;
+    }
+
+    if (token->type != TOKEN_STRING) {
         return PARSER_UNEXPECTED_TOKEN;
     }
 
     parser->block.type = BLOCK_INCLUDE;
-    string_copy(
-        &parser->block.as.include.tag,
-        &parser->splitter.section
-    );
-    string_copy(
-        &parser->block.as.include.path,
-        &parser->lexer.token.as.string
-    );
+    sslice_shallow_copy(&parser->block.as.include.path, &token->as.string);
 
     return PARSER_OK;
 }
@@ -71,22 +70,44 @@ static ParserStatus parse_paren(Parser *parser) {
     return PARSER_OK;
 }
 
-static ParserStatus parse_code(Parser *parser) {
-    ParserStatus ps;
-    LexerStatus  ls;
+void parser_init(Parser *parser, SSlice *data) {
+    parser->parenthesis_level = 0;
+    parser->bracket_level = 0;
+    parser->brace_level = 0;
+    lexer_init(&parser->lexer);
+    lexer_set_data(&parser->lexer, data);
+}
 
-    lexer_init(&parser->lexer, &parser->splitter.section);
+void parser_clear(Parser *parser) {
+    parser->parenthesis_level = 0;
+    parser->bracket_level = 0;
+    parser->brace_level = 0;
+    lexer_clear(&parser->lexer);
+}
+
+ParserStatus parser_load_next(Parser *parser) {
+    LexerStatus   ls;
+    Token        *token;
+
     ls = lexer_load_next_skip_whitespace(&parser->lexer);
 
     switch (ls) {
-        case LEXER_EOF:
-            return PARSER_EOF;
-        case LEXER_INTERNAL_ERROR:
-            return PARSER_INTERNAL_ERROR;
+        case LEXER_DATA_MEMORY_EXHAUSTED:
+            return PARSER_DATA_MEMORY_EXHAUSTED;
+        case LEXER_DATA_OVERFLOW:
+            return PARSER_DATA_OVERFLOW;
+        case LEXER_DATA_INVALID_UTF8:
+            return PARSER_DATA_INVALID_UTF8;
+        case LEXER_DATA_NOT_ASSIGNED:
+            return PARSER_DATA_NOT_ASSIGNED;
+        case LEXER_DATA_INVALID_OPTS:
+            return PARSER_DATA_INVALID_OPTS;
+        case LEXER_END:
+            return PARSER_END;
         case LEXER_UNKNOWN_TOKEN:
             return PARSER_UNKNOWN_TOKEN;
-        case LEXER_OK:
-        case LEXER_MAX:
+        case LEXER_INVALID_NUMBER_FORMAT:
+            return PARSER_INVALID_NUMBER_FORMAT;
         default:
             break;
     }
@@ -127,9 +148,15 @@ static ParserStatus parse_code(Parser *parser) {
      *
      */
 
-    switch (parser->lexer.token.type) {
+    token = lexer_get_current_token(&parser->lexer);
+
+    if (!token) {
+        return PARSER_END;
+    }
+
+    switch (token->type) {
          case TOKEN_SYMBOL: {
-            switch (parser->lexer.token.as.symbol) {
+            switch (token->as.symbol) {
                 case SYMBOL_OPAREN: {
                     return parse_paren(parser);
                 }
@@ -140,7 +167,7 @@ static ParserStatus parse_code(Parser *parser) {
             break;
         }
         case TOKEN_KEYWORD: {
-            switch (parser->lexer.token.as.keyword) {
+            switch (token->as.keyword) {
                 case KEYWORD_INCLUDE: {
                     return parse_include(parser);
                 }
@@ -180,40 +207,6 @@ static ParserStatus parse_code(Parser *parser) {
     }
 
     return PARSER_UNEXPECTED_TOKEN;
-}
-
-void parser_init(Parser *parser, String *code) {
-    splitter_init(&parser->splitter, code->data);
-    parser->parenthesis_level = 0;
-    parser->bracket_level = 0;
-    parser->brace_level = 0;
-    parser->tokens = g_array_sized_new(
-        false, false, sizeof(Token), TOKEN_ALLOC_COUNT
-    );
-}
-
-void parser_clear(Parser *parser) {
-    splitter_clear(&parser->splitter);
-    lexer_clear(&parser->lexer);
-    parser->parenthesis_level = 0;
-    parser->bracket_level = 0;
-    parser->brace_level = 0;
-    g_array_free(parser->tokens, true);
-}
-
-ParserStatus parser_load_next(Parser *parser) {
-    if (!splitter_load_next(&parser->splitter)) {
-        return PARSER_EOF;
-    }
-
-    if (parser->splitter.section_is_code) {
-        return parse_code(parser);
-    }
-
-    parser->block.type = BLOCK_TEXT;
-    string_copy(&parser->block.as.text, &parser->splitter.section);
-
-    return PARSER_OK;
 }
 
 /* vi: set et ts=4 sw=4: */

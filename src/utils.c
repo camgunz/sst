@@ -7,6 +7,7 @@
 #include <utf8proc.h>
 
 #include "config.h"
+#include "rune.h"
 
 char* _strndup(const char *cs, size_t maxlen) {
     size_t requested_size = maxlen + 1;

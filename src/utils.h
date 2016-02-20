@@ -2,7 +2,7 @@
 #define UTILS_H__
 
 char* _strndup(const char *cs, size_t maxlen);
-char* _strdup(const char *cs):
+char* _strdup(const char *cs);
 char* chardup(rune r);
 void  die(const char *format, ...);
 char* find_next(char *data, rune r);

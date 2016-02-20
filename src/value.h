@@ -16,7 +16,7 @@ typedef enum {
 
 typedef struct {
     ValueType  type;
-    GString   *string;
+    String    *string;
     mpfr_t     number;
 } Value;
 

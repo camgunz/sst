@@ -2,10 +2,16 @@
 #define PARSER_H__
 
 typedef enum {
-    PARSER_OK             = LEXER_OK,
-    PARSER_EOF            = LEXER_EOF,
-    PARSER_INTERNAL_ERROR = LEXER_INTERNAL_ERROR,
-    PARSER_UNKNOWN_TOKEN  = LEXER_UNKNOWN_TOKEN,
+    PARSER_OK                    = LEXER_OK,
+    PARSER_DATA_MEMORY_EXHAUSTED = LEXER_DATA_MEMORY_EXHAUSTED,
+    PARSER_DATA_OVERFLOW         = LEXER_DATA_OVERFLOW,
+    PARSER_DATA_INVALID_UTF8     = LEXER_DATA_INVALID_UTF8,
+    PARSER_DATA_NOT_ASSIGNED     = LEXER_DATA_NOT_ASSIGNED,
+    PARSER_DATA_INVALID_OPTS     = LEXER_DATA_INVALID_OPTS,
+    PARSER_END                   = LEXER_END,
+    PARSER_UNKNOWN_TOKEN         = LEXER_UNKNOWN_TOKEN,
+    PARSER_INVALID_NUMBER_FORMAT = LEXER_INVALID_NUMBER_FORMAT,
+    PARSER_INTERNAL_ERROR,
     PARSER_UNEXPECTED_TOKEN,
     PARSER_MAX
 } ParserStatus;
@@ -20,14 +26,14 @@ typedef enum {
     BLOCK_MAX
 } BlockType;
 
-typedef String Text;
+typedef SSlice Text;
 
 /*
  * {{ include "path/to/template.html" }}
  */
 typedef struct {
-    String tag;
-    String path;
+    SSlice tag;
+    SSlice path;
 } IncludeStatement;
 
 typedef struct {
@@ -40,15 +46,15 @@ typedef struct {
 
 #if 0
 
-typedef String IdentifierExpression;
+typedef SSlice IdentifierExpression;
 
 /*
  * {{ site.name }}
  * {{ site.name | capitalize }}
  */
 typedef struct {
-    String literal;
-    String filter_name; /* optional */
+    SSlice literal;
+    SSlice filter_name; /* optional */
 } Expression;
 
 /*
@@ -59,11 +65,11 @@ typedef struct {
  * {{ endif }}
  */
 typedef struct {
-    String literal;
-    String block;
+    SSlice literal;
+    SSlice block;
     BoolOp operator;    /* optional */
-    String expression1; /* optional */
-    String expression2; /* optional */
+    SSlice expression1; /* optional */
+    SSlice expression2; /* optional */
 } ConditionalStatement;
 
 /*
@@ -72,10 +78,10 @@ typedef struct {
  * {{ endfor }}
  */
 typedef struct {
-    String literal;
-    String block;
-    String identifiers;
-    String expression;
+    SSlice literal;
+    SSlice block;
+    SSlice identifiers;
+    SSlice expression;
 } IterationStatement;
 
 /*
@@ -83,23 +89,21 @@ typedef struct {
  * {{ endraw }}
  */
 typedef struct {
-    String literal;
-    String block;
+    SSlice literal;
+    SSlice block;
 } RawStatement;
 
 #endif
 
 typedef struct {
-    Splitter  splitter;
     Lexer     lexer;
     size_t    parenthesis_level;
     size_t    bracket_level;
     size_t    brace_level;
-    Array    *tokens;
     Block     block;
 } Parser;
 
-void         parser_init(Parser *parser, String *code);
+void         parser_init(Parser *parser, SSlice *code);
 ParserStatus parser_validate(Parser *parser);
 
 #endif

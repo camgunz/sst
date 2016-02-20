@@ -4,15 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <gmp.h>
-#include <mpfr.h>
+#include <mpdecimal.h>
+#include <utf8proc.h>
 
 #include "config.h"
+#include "rune.h"
 #include "str.h"
-#include "utils.h"
 #include "lexer.h"
-#include "splitter.h"
 #include "value.h"
+#include "utils.h"
 
 #define NUMBER1 "82349023489234902342323419041892349034189341.143"
 #define NUMBER2 "9378334023462303455668934502028340345.2890383143"
@@ -36,14 +36,29 @@
 
 
 
-void test_mpfr(void) {
-    mpfr_t n;
-    mpfr_exp_t ep;
+void test_mpd(void) {
+    mpd_context_t ctx;
+    mpd_t *n;
+    char *sn = NULL;
+    uint32_t res = 0;
 
-    mpfr_init2(n, DEFAULT_PRECISION);
-    mpfr_strtofr(n, NUMBER1, NULL, 0, MPFR_RNDZ);
+    mpd_maxcontext(&ctx);
 
-    printf("Number: %s\n", mpfr_get_str(NULL, &ep, 10, 0, n, MPFR_RNDZ));
+    n = mpd_qnew();
+
+    if (!n) {
+        die("Allocating new number failed\n");
+    }
+
+    mpd_qset_string(n, NUMBER1, &ctx, &res);
+
+    mpd_strtofr(n, NUMBER1, NULL, 0, MPFR_RNDZ);
+    sn = mpd_to_sci(n, 0);
+
+    printf("Number: %s\n", sn);
+
+    free(sn);
+    mpd_del(n);
 }
 
 void test_string(void) {
@@ -51,35 +66,35 @@ void test_string(void) {
     char *cs = strdup(NUMBER1);
     uint32_t uc;
 
-    string_assign(&s, cs);
-    printf("Equals: %u\n", string_equals(&s, cs));
-    printf("Starts with 8234: %u\n", string_starts_with(&s, "8234"));
+    sslice_assign(&s, cs);
+    printf("Equals: %u\n", sslice_equals(&s, cs));
+    printf("Starts with 8234: %u\n", sslice_starts_with(&s, "8234"));
     printf("String length: %u\n", s.len);
 
-    string_first_char(&s, &uc);
+    sslice_first_char(&s, &uc);
     printf("First char: %c\n", uc);
 
     uc = 0;
 
-    string_pop_char(&s, &uc);
+    sslice_pop_char(&s, &uc);
     printf("Popped first char: %c\n", uc);
     printf("String length: %u\n", s.len);
 
-    printf("Second char is '2': %u\n", string_first_char_equals(&s, '2'));
+    printf("Second char is '2': %u\n", sslice_first_char_equals(&s, '2'));
 
-    string_pop_char_if_equals(&s, '2');
-    printf("Second char: %u\n", string_first_char_equals(&s, '2'));
+    sslice_pop_char_if_equals(&s, '2');
+    printf("Second char: %u\n", sslice_first_char_equals(&s, '2'));
     printf("String length: %u\n", s.len);
 
-    string_pop_char_if_digit(&s, &uc);
+    sslice_pop_char_if_digit(&s, &uc);
     printf("Third char: %c\n", uc);
     printf("String length: %u\n", s.len);
 
-    string_pop_char_if_alnum(&s, &uc);
+    sslice_pop_char_if_alnum(&s, &uc);
     printf("Fourth char: %c\n", uc);
     printf("String length: %u\n", s.len);
 
-    printf("Find 0: %s\n", string_find(&s, '0'));
+    printf("Find 0: %s\n", sslice_find(&s, '0'));
 }
 
 void test_add(void) {
@@ -94,8 +109,8 @@ void test_add(void) {
     value_init(&v2);
     value_init(&v3);
 
-    string_assign(&s1, NUMBER1);
-    string_assign(&s2, NUMBER2);
+    sslice_assign(&s1, NUMBER1);
+    sslice_assign(&s2, NUMBER2);
 
     value_set_number(&v1, &s1);
     value_set_number(&v2, &s2);
@@ -139,16 +154,14 @@ static const char *token_types[TOKEN_MAX] = {
 static char* token_to_string(Token *token) {
     switch (token->type) {
         case TOKEN_NUMBER: {
-            mpfr_exp_t ep;
-
-            return mpfr_get_str(NULL, &ep, 10, 0, token->as.number, MPFR_RNDZ);
+            return mpd_to_sci(token->as.number, 0);
         }
         case TOKEN_KEYWORD:
             return strdup(KeywordValues[token->as.keyword]);
         case TOKEN_IDENTIFIER:
-            return string_to_c_string(&token->as.identifier);
+            return sslice_to_c_string(&token->as.identifier);
         case TOKEN_STRING:
-            return string_to_c_string(&token->as.string);
+            return sslice_to_c_string(&token->as.string);
         case TOKEN_BOOLOP:
             return strdup(BoolOpValues[token->as.bool_op]);
         case TOKEN_UNARY_BOOLOP:

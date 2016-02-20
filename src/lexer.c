@@ -4,23 +4,26 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <gmp.h>
-#include <mpfr.h>
+#include <mpdecimal.h>
+#include <utf8proc.h>
 
 #include "config.h"
-#include "utils.h"
+#include "rune.h"
 #include "str.h"
+#include "array.h"
+#include "parray.h"
 #include "lexer.h"
+#include "utils.h"
 
-const uint32_t MathOpValues[MATHOP_MAX] = {
+const rune MathOpValues[MATHOP_MAX] = {
     '+', '-', '*', '/', '%', '^',
 };
 
-const uint32_t SymbolValues[SYMBOL_MAX] = {
+const rune SymbolValues[SYMBOL_MAX] = {
     '(', ')', '[', ']', '{', '}', ',', '.', '\'', '`', '"', '|'
 };
 
-const uint32_t WhitespaceValues[WHITESPACE_MAX] = {
+const rune WhitespaceValues[WHITESPACE_MAX] = {
     ' ', '\t', '\r', '\n',
 };
 
@@ -33,47 +36,52 @@ const char *KeywordValues[KEYWORD_MAX] = {
     "endraw", "range"
 };
 
-static bool seek_to_next_code_tag_start(String *s) {
-    String cursor;
-    StringStatus res;
+static SSliceStatus seek_to_next_code_tag_start(SSlice *s) {
+    SSlice cursor;
+    SSliceStatus res;
 
-    string_shallow_copy(&cursor, s);
+    sslice_shallow_copy(&cursor, s);
 
     while (true) {
-        if (string_starts_with(&cursor, "{{")) {
+        if (sslice_starts_with(&cursor, "{{")) {
             break;
         }
 
-        if (string_advance_rune(&cursor) != STRING_OK) {
-            return false;
+        res = sslice_advance_rune(&cursor);
+
+        if (res != SSLICE_OK) {
+            return res;
         }
     }
 
-    string_shallow_copy(s, &cursor);
+    sslice_shallow_copy(s, &cursor);
 
-    return true;
+    return SSLICE_OK;
 }
 
-static bool find_next_code_tag(String *data, String *tag) {
-    String tag2;
+static bool find_next_code_tag(SSlice *data, SSlice *tag) {
+    SSlice tag2;
     char *open;
+    SSliceStatus res;
 
-    string_shallow_copy(&tag2, data);
+    sslice_shallow_copy(&tag2, data);
 
-    if (!seek_to_next_code_tag_start(&tag2)) {
+    res = seek_to_next_code_tag_start(&tag2);
+
+    if (res != SSLICE_OK) {
         return false;
     }
 
     open = tag2.data;
 
     while (true) {
-        StringStatus res;
+        SSliceStatus res;
         rune in_string = '\0';
         rune r;
 
-        res = string_pop_rune(&tag2, &r);
+        res = sslice_pop_rune(&tag2, &r);
 
-        if (res != STRING_OK) {
+        if (res != SSLICE_OK) {
             return false;
         }
 
@@ -122,51 +130,163 @@ static bool find_next_code_tag(String *data, String *tag) {
             }
         }
 
-        if ((in_string == '\0') && string_starts_with(&tag2, "}}")) {
-            if (string_advance_rune(&tag2) != STRING_OK) {
+        if ((in_string == '\0') && sslice_starts_with(&tag2, "}}")) {
+            if (sslice_advance_rune(&tag2) != SSLICE_OK) {
                 return false;
             }
 
-            if (string_advance_rune(&tag2) != STRING_OK) {
+            if (sslice_advance_rune(&tag2) != SSLICE_OK) {
                 return false;
             }
 
-            tag2.len = tag.data - open;
+            tag2.len = tag->data - open;
             tag2.data = open;
 
-            string_shallow_copy(tag, &tag2);
+            sslice_shallow_copy(tag, &tag2);
 
             return true;
         }
     }
 }
 
-void lexer_clear(Lexer *lexer) {
-    string_clear(&lexer->data);
-    string_clear(&lexer->tag);
-    lexer->token.type = TOKEN_UNKNOWN;
+void token_copy(Token *dst, Token *src) {
+    dst->type = src->type;
+
+    switch (src->type) {
+        case TOKEN_TEXT:
+            sslice_shallow_copy(&dst->as.text, &src->as.text);
+            break;
+        case TOKEN_NUMBER:
+            dst->as.number = src->as.number;
+            break;
+        case TOKEN_KEYWORD:
+            dst->as.keyword = src->as.keyword;
+            break;
+        case TOKEN_IDENTIFIER:
+            sslice_shallow_copy(&dst->as.identifier, &src->as.identifier);
+            break;
+        case TOKEN_STRING:
+            sslice_shallow_copy(&dst->as.string, &src->as.string);
+            break;
+        case TOKEN_BOOLOP:
+            dst->as.bool_op = src->as.bool_op;
+            break;
+        case TOKEN_UNARY_BOOLOP:
+            dst->as.unary_bool_op = src->as.unary_bool_op;
+            break;
+        case TOKEN_MATHOP:
+            dst->as.math_op = src->as.math_op;
+            break;
+        case TOKEN_SYMBOL:
+            dst->as.symbol = src->as.symbol;
+            break;
+        case TOKEN_WHITESPACE:
+            dst->as.whitespace = src->as.whitespace;
+            break;
+        case TOKEN_UNKNOWN:
+            break;
+        default:
+            die("Invalid token type %d\n", src->type);
+            break;
+    }
 }
 
-void lexer_set_data(Lexer *lexer, String *data) {
+void token_queue_clear(TokenQueue *token_queue) {
+    token_queue->head = 0;
+    token_queue->tail = 0;
+
+    for (int i = 0; i < TOKEN_QUEUE_SIZE; i++) {
+        token_queue->tokens[i].type = TOKEN_UNKNOWN;
+    }
+}
+
+uint8_t token_queue_count(TokenQueue *token_queue) {
+    uint16_t head = token_queue->head;
+    uint16_t tail = token_queue->tail;
+
+    if (head > tail) {
+        tail += TOKEN_QUEUE_SIZE;
+    }
+
+    return (tail - head) + 1;
+}
+
+bool token_queue_empty(TokenQueue *token_queue) {
+    return token_queue_count(token_queue) == 0;
+}
+
+bool token_queue_full(TokenQueue *token_queue) {
+    return token_queue_count(token_queue) == TOKEN_QUEUE_SIZE;
+}
+
+bool token_queue_push(TokenQueue *token_queue, Token *token) {
+    if (token_queue_full(token_queue)) {
+        return false;
+    }
+
+    token_queue->tail = (token_queue->tail + 1) % TOKEN_QUEUE_SIZE;
+
+    if (token_queue_full(token_queue)) {
+        token_queue->head = (token_queue->head + 1) % TOKEN_QUEUE_SIZE;
+    }
+
+    token_copy(&token_queue->tokens[token_queue->tail], token);
+
+    return true;
+}
+
+Token* token_queue_pop(TokenQueue *token_queue) {
+    if (!token_queue_empty(token_queue)) {
+        return NULL;
+    }
+
+    Token *token = &token_queue->tokens[token_queue->head];
+
+    token_queue->head++;
+
+    return token;
+}
+
+Token* token_queue_push_new(TokenQueue *token_queue) {
+    if (token_queue_full(token_queue)) {
+        token_queue->head = (token_queue->head + 1) % TOKEN_QUEUE_SIZE;
+    }
+
+    token_queue->tail = (token_queue->tail + 1) % TOKEN_QUEUE_SIZE;
+
+    return &token_queue->tokens[token_queue->tail];
+}
+
+void lexer_init(Lexer *lexer) {
+    lexer_clear(lexer);
+    mpd_maxcontext(&lexer->mpd);
+}
+
+void lexer_clear(Lexer *lexer) {
+    sslice_clear(&lexer->data);
+    sslice_clear(&lexer->tag);
+    lexer->in_raw = false;
+    token_queue_clear(&lexer->tokens);
+}
+
+void lexer_set_data(Lexer *lexer, SSlice *data) {
     lexer_clear(lexer);
 
-    string_shallow_copy(&lexer->data, data);
+    sslice_shallow_copy(&lexer->data, data);
 }
 
 LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
-    String buf;
     rune r;
-    StringStatus res;
+    SSlice start;
 
-    buf.data = lexer->code.data;
-    buf.len = 0;
+    sslice_shallow_copy(&start, &lexer->data);
 
     while (true) {
-        if (string_empty(&lexer->code)) {
+        if (sslice_empty(&lexer->data)) {
             return LEXER_END;
         }
 
-        if (!string_pop_char(&lexer->code, &r)) {
+        if (!sslice_pop_rune(&lexer->data, &r)) {
             return LEXER_END;
         }
 
@@ -174,9 +294,13 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
 
         for (Whitespace ws = WHITESPACE_FIRST; ws < WHITESPACE_MAX; ws++) {
             if (r == WhitespaceValues[ws]) {
-                lexer->token.type = TOKEN_WHITESPACE;
-                lexer->token.as.whitespace = ws;
+                Token *token = token_queue_push_new(&lexer->tokens);
+
+                token->type = TOKEN_WHITESPACE;
+                token->as.whitespace = ws;
+
                 found_whitespace = true;
+
                 break;
             }
         }
@@ -201,25 +325,25 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         while (true) {
             rune r2;
 
-            if (!string_first_char(&lexer->code, &r2)) {
+            if (!sslice_get_first_rune(&lexer->data, &r2)) {
                 return LEXER_END;
             }
 
             if (rune_is_digit(r2)) {
                 found_at_least_one_digit = true;
-                string_pop_char(&lexer->code, NULL);
+                sslice_pop_rune(&lexer->data, NULL);
                 continue;
             }
 
             if (r2 == ',') {
-                string_pop_char(&lexer->code, NULL);
+                sslice_pop_rune(&lexer->data, NULL);
                 continue;
             }
 
             if (r2 == '.') {
                 if (!found_period) {
                     found_period = true;
-                    string_pop_char(&lexer->code, NULL);
+                    sslice_pop_rune(&lexer->data, NULL);
                     continue;
                 }
             }
@@ -228,27 +352,34 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         }
 
         if (found_at_least_one_digit) {
-            char *resume;
+            Token *token;
+            uint32_t res = 0;
+            char *num = strndup(start.data, lexer->data.data - start.data);
 
-            lexer->token.type = TOKEN_NUMBER;
-            mpfr_init2(lexer->token.as.number, DEFAULT_PRECISION);
-
-            mpfr_strtofr(
-                lexer->token.as.number, buf.data, &resume, 0, MPFR_RNDZ
-            );
-
-            if (resume == buf.data) {
-                return LEXER_INVALID_NUMBER_FORMAT;
+            if (!num) {
+                return LEXER_DATA_MEMORY_EXHAUSTED;
             }
 
-            return string_advance_bytes(resume - buf.data);
+            token = token_queue_push_new(&lexer->tokens);
+            token->type = TOKEN_NUMBER;
+
+            mpd_qset_string(token->as.number, num, &lexer->mpd, &res);
+
+            free(num);
+
+            if (res != 0) {
+                return LEXER_INVALID_NUMBER_FORMAT;
+            }
         }
+
+        return LEXER_INVALID_NUMBER_FORMAT;
     }
 
+#if 0
     if (rune_is_alpha(r) || r == '_') {
-        res = string_truncate_at_whitespace(&buf);
+        res = sslice_truncate_at_whitespace(&buf);
 
-        if (res != STRING_OK) {
+        if (res != SSLICE_OK) {
             return res;
         }
 
@@ -257,7 +388,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         }
 
         for (Keyword kw = KEYWORD_FIRST; kw < KEYWORD_MAX; kw++) {
-            if (string_equals(&buf, KeywordValues[kw])) {
+            if (sslice_equals(&buf, KeywordValues[kw])) {
                 lexer->token.type = TOKEN_KEYWORD;
                 lexer->token.as.keyword = kw;
 
@@ -266,19 +397,19 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         }
 
         lexer->token.type = TOKEN_IDENTIFIER;
-        string_shallow_copy(&lexer->token.as.identifier, &buf);
+        sslice_shallow_copy(&lexer->token.as.identifier, &buf);
 
         return LEXER_OK;
     }
 
     if (r == '\'' || r == '`' || r == '"') {
-        res = string_truncate_at(&buf, r);
+        res = sslice_truncate_at(&buf, r);
 
         switch (res) {
-            case STRING_END:
-            case STRING_MEMORY_EXHAUSTED:
-            case STRING_NOT_ASSIGNED:
-            case STRING_INVALID_OPTS: {
+            case SSLICE_END:
+            case SSLICE_MEMORY_EXHAUSTED:
+            case SSLICE_NOT_ASSIGNED:
+            case SSLICE_INVALID_OPTS: {
                 return res;
             }
             default: {
@@ -286,13 +417,13 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
             }
         }
 
-        res = string_truncate_runes(&buf, 1);
+        res = sslice_truncate_runes(&buf, 1);
 
         switch (res) {
-            case STRING_END:
-            case STRING_MEMORY_EXHAUSTED:
-            case STRING_NOT_ASSIGNED:
-            case STRING_INVALID_OPTS: {
+            case SSLICE_END:
+            case SSLICE_MEMORY_EXHAUSTED:
+            case SSLICE_NOT_ASSIGNED:
+            case SSLICE_INVALID_OPTS: {
                 return res;
             }
             default: {
@@ -301,13 +432,13 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         }
 
         lexer->token.type = TOKEN_STRING;
-        string_shallow_copy(&lexer->token.as.string, &buf);
+        sslice_shallow_copy(&lexer->token.as.string, &buf);
 
-        return string_advance_bytes(&lexer->data, buf.len + 1);
+        return sslice_advance_bytes(&lexer->data, buf.len + 1);
     }
 
     if (uc == '=') {
-        if (string_pop_char_if_equals(&lexer->code, '=')) {
+        if (sslice_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_EQUAL;
         }
@@ -319,7 +450,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     }
 
     if (uc == '<') {
-        if (string_pop_char_if_equals(&lexer->code, '=')) {
+        if (sslice_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_LESS_THAN_OR_EQUAL;
         }
@@ -331,7 +462,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     }
 
     if (uc == '>') {
-        if (string_pop_char_if_equals(&lexer->code, '=')) {
+        if (sslice_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_GREATER_THAN_OR_EQUAL;
         }
@@ -343,7 +474,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     }
 
     if (uc == '&') {
-        if (string_pop_char_if_equals(&lexer->code, '&')) {
+        if (sslice_pop_char_if_equals(&lexer->code, '&')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_AND;
         }
@@ -355,7 +486,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     }
 
     if (uc == '|') {
-        if (string_pop_char_if_equals(&lexer->code, '|')) {
+        if (sslice_pop_char_if_equals(&lexer->code, '|')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_OR;
         }
@@ -367,7 +498,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     }
 
     if (uc == '!') {
-        if (string_pop_char_if_equals(&lexer->code, '=')) {
+        if (sslice_pop_char_if_equals(&lexer->code, '=')) {
             lexer->token.type = TOKEN_BOOLOP;
             lexer->token.as.bool_op = BOOLOP_NOT_EQUAL;
         }
@@ -393,10 +524,19 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
             return LEXER_OK;
         }
     }
+#endif
 
-    lexer->token.type = TOKEN_UNKNOWN;
-    lexer->token.as.literal = uc;
     return LEXER_UNKNOWN_TOKEN;
+}
+
+Token* lexer_get_current_token(Lexer *lexer) {
+    TokenQueue *token_queue = &lexer->tokens;
+
+    if (token_queue_empty(token_queue)) {
+        return NULL;
+    }
+
+    return &token_queue->tokens[token_queue->tail];
 }
 
 /* vi: set et ts=4 sw=4: */

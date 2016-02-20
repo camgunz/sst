@@ -1,8 +1,7 @@
-typedef struct {
-    size_t  esize;
-    size_t  ecount;
-    void   *elements;
-} Array;
+#include <stdbool.h>
+#include <stdlib.h>
+
+#include "array.h"
 
 Array* array_new(size_t size, size_t count) {
     Array *array = malloc(sizeof(Array));
@@ -18,11 +17,14 @@ Array* array_new(size_t size, size_t count) {
         return NULL;
     }
 
+    array->esize = size;
+    array->ecount = count;
+
     return array;
 }
 
 bool array_ensure_capacity(Array *array, size_t count) {
-    if (array->count >= count) {
+    if (array->ecount >= count) {
         return true;
     }
 
@@ -33,7 +35,7 @@ bool array_ensure_capacity(Array *array, size_t count) {
     }
 
     array->elements = new_elements;
-    array->count = count;
+    array->ecount = count;
 
     return true;
 }
