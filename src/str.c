@@ -4,19 +4,26 @@
 #include "str.h"
 
 StringStatus string_init(String *s, char *data) {
-    string_free(s);
-
     if (data) {
         size_t len = strlen(data);
 
-        s->data = calloc(len + 1, sizeof(char));
+        s->data = malloc(len + 1);
 
         if (!s->data) {
             return STRING_DATA_MEMORY_EXHAUSTED;
         }
 
+        memcpy(s->data, data, len);
+
         s->len = len;
         s->alloc = len + 1;
+
+        *(s->data + s->alloc) = '\0';
+    }
+    else {
+        s->data = NULL;
+        s->len = 0;
+        s->alloc = 0;
     }
 
     return STRING_OK;

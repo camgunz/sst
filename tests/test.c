@@ -15,8 +15,8 @@
 #include "value.h"
 #include "utils.h"
 
-#define NUMBER1 "82349023489234902342323419041892349034189341.143"
-#define NUMBER2 "9378334023462303455668934502028340345.2890383143"
+#define NUMBER1 "82349023489234902342323419041892349034189341.796"
+#define NUMBER2 "13982309378334023462303455668934502028340345.289"
 
 #define TEMPLATE \
 "{{ include '/srv/http/templates/header.txt' }}\n"                         \
@@ -99,32 +99,36 @@ void test_sslice(void) {
 }
 
 void test_add(void) {
+    String s1;
+    String s2;
     Value v1;
     Value v2;
     Value v3;
-    String s1;
-    String s2;
+    char *v1s;
+    char *v2s;
     char *result;
     mpd_context_t mpd_ctx;
 
     mpd_maxcontext(&mpd_ctx);
 
-    /*
+    string_init(&s1, NUMBER1);
+    string_init(&s2, NUMBER2);
+
     value_init(&v1, &mpd_ctx);
     value_init(&v2, &mpd_ctx);
     value_init(&v3, &mpd_ctx);
-
-    string_assign(&s1, NUMBER1);
-    string_assign(&s2, NUMBER2);
 
     value_set_number(&v1, &s1);
     value_set_number(&v2, &s2);
 
     value_add(&v3, &v1, &v2);
+
+    value_as_string(&v1s, &v1);
+    value_as_string(&v2s, &v2);
+
     value_as_string(&result, &v3);
 
-    printf("Result: %s + %s = %s\n", NUMBER1, NUMBER2, result);
-    */
+    printf("Result: %s + %s = %s\n", v1s, v2s, result);
 }
 
 #if 0
@@ -221,11 +225,11 @@ void test_lexer(void) {
 int main(void) {
     test_mpd();
     test_sslice();
-#if 0
     test_add();
 #if 0
     test_splitter();
 #endif
+#if 0
     test_lexer();
 #endif
 
