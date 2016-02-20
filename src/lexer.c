@@ -149,7 +149,33 @@ static bool find_next_code_tag(SSlice *data, SSlice *tag) {
     }
 }
 
-void token_copy(Token *dst, Token *src) {
+LexerStatus token_clear(Token *token) {
+    switch (token->type) {
+        case TOKEN_TEXT:
+            sslice_clear(&token->as.text);
+            break;
+        case TOKEN_NUMBER:
+            mpd_del(token->as.number);
+            break;
+        case TOKEN_IDENTIFIER:
+            sslice_clear(&token->as.identifier);
+            break;
+        case TOKEN_STRING:
+            sslice_clear(&token->as.string);
+            break;
+        case TOKEN_UNKNOWN:
+            break;
+        default:
+            return LEXER_UNKNOWN_TOKEN;
+    }
+
+    token->type = TOKEN_UNKNOWN;
+    return LEXER_OK;
+}
+
+LexerStatus token_copy(Token *dst, Token *src) {
+    token_clear(dst);
+
     dst->type = src->type;
 
     switch (src->type) {
@@ -186,9 +212,11 @@ void token_copy(Token *dst, Token *src) {
         case TOKEN_UNKNOWN:
             break;
         default:
-            die("Invalid token type %d\n", src->type);
+            return LEXER_UNKNOWN_TOKEN;
             break;
     }
+
+    return LEXER_OK;
 }
 
 void token_queue_clear(TokenQueue *token_queue) {
@@ -196,7 +224,7 @@ void token_queue_clear(TokenQueue *token_queue) {
     token_queue->tail = 0;
 
     for (int i = 0; i < TOKEN_QUEUE_SIZE; i++) {
-        token_queue->tokens[i].type = TOKEN_UNKNOWN;
+        token_clear(&token_queue->tokens[i]);
     }
 }
 
@@ -278,16 +306,17 @@ void lexer_set_data(Lexer *lexer, SSlice *data) {
 LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
     rune r;
     SSlice start;
-
-    sslice_shallow_copy(&start, &lexer->data);
+    SSliceStatus sstatus;
 
     while (true) {
         if (sslice_empty(&lexer->data)) {
             return LEXER_END;
         }
 
-        if (!sslice_pop_rune(&lexer->data, &r)) {
-            return LEXER_END;
+        sstatus = sslice_get_first_rune(&lexer->data, &r);
+
+        if (sstatus != SSLICE_OK) {
+            return sstatus;
         }
 
         bool found_whitespace = false;
@@ -303,6 +332,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
 
                 break;
             }
+
         }
 
         if (!found_whitespace) {
@@ -312,21 +342,34 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         if (!skip_whitespace) {
             return LEXER_OK;
         }
+
+        sstatus = sslice_advance_rune(&lexer->data);
+        if (sstatus != SSLICE_OK) {
+            return sstatus;
+        }
+
+        sstatus = sslice_get_first_rune(&lexer->data, &r);
+        if (sstatus != SSLICE_OK) {
+            return sstatus;
+        }
     }
+
+    sslice_shallow_copy(&start, &lexer->data);
 
     if (rune_is_digit(r) || r == '-' || r == '.') {
         bool found_at_least_one_digit = false;
-        bool found_period = false;
-
-        if (r == '.') {
-            found_period = true;
-        }
 
         while (true) {
             rune r2;
 
-            if (!sslice_get_first_rune(&lexer->data, &r2)) {
-                return LEXER_END;
+            sstatus = sslice_get_first_rune(&lexer->data, &r2);
+
+            if (sstatus != SSLICE_OK) {
+                if (sstatus == SSLICE_END) {
+                    break;
+                }
+
+                return sstatus;
             }
 
             if (rune_is_digit(r2)) {
@@ -341,11 +384,8 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
             }
 
             if (r2 == '.') {
-                if (!found_period) {
-                    found_period = true;
-                    sslice_pop_rune(&lexer->data, NULL);
-                    continue;
-                }
+                sslice_pop_rune(&lexer->data, NULL);
+                continue;
             }
 
             break;
@@ -354,7 +394,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
         if (found_at_least_one_digit) {
             Token *token;
             uint32_t res = 0;
-            char *num = strndup(start.data, lexer->data.data - start.data);
+            char *num = strndup(start.data, (lexer->data.data - start.data) - 1);
 
             if (!num) {
                 return LEXER_DATA_MEMORY_EXHAUSTED;
@@ -362,6 +402,13 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
 
             token = token_queue_push_new(&lexer->tokens);
             token->type = TOKEN_NUMBER;
+            token->as.number = mpd_new(&lexer->mpd_ctx);
+
+            if (!token->as.number) {
+                free(num);
+
+                return LEXER_DATA_MEMORY_EXHAUSTED;
+            }
 
             mpd_qset_string(token->as.number, num, &lexer->mpd_ctx, &res);
 
@@ -370,6 +417,8 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
             if (res != 0) {
                 return LEXER_INVALID_NUMBER_FORMAT;
             }
+
+            return LEXER_OK;
         }
 
         return LEXER_INVALID_NUMBER_FORMAT;

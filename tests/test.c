@@ -18,7 +18,7 @@
 #define NUMBER1 "82349023489234902342323419041892349034189341.796"
 #define NUMBER2 "13982309378334023462303455668934502028340345.289"
 
-#define TEMPLATE \
+#define REAL_TEMPLATE \
 "{{ include '/srv/http/templates/header.txt' }}\n"                         \
 "\n"                                                                       \
 "{{ if person.age >= 18 }}\n"                                              \
@@ -35,7 +35,7 @@
 "\n"                                                                       \
 "{{ include '/srv/http/templates/footer.txt' }}\n"
 
-
+#define TEMPLATE " 14 983 2876.55"
 
 void test_mpd(void) {
     mpd_context_t ctx;
@@ -207,18 +207,44 @@ static char* token_to_string(Token *token) {
 void test_lexer(void) {
     Lexer lexer;
     SSlice data;
+    SSliceStatus status;
+    LexerStatus lstatus;
 
-    sslice_assign_validate(&data, TEMPLATE);
+    status = sslice_assign_validate(&data, TEMPLATE);
+
+    if (status != SSLICE_OK) {
+        die("Bad status: %d\n", status);
+    }
+
+    printf("Data: %s\n", data.data);
 
     lexer_init(&lexer);
     lexer_set_data(&lexer, &data);
 
-    while (lexer_load_next_skip_whitespace(&lexer)) {
+    printf("Lexer data: %s\n", lexer.data.data);
+
+    while (true) {
+        lstatus = lexer_load_next_skip_whitespace(&lexer);
         Token *token = lexer_get_current_token(&lexer);
+
+        if (lstatus != LEXER_OK) {
+            break;
+        }
+
+        if (token->type == TOKEN_UNKNOWN) {
+            die("Got unknown token\n");
+        }
 
         printf("Token: %s [%s]\n",
             token_types[token->type], token_to_string(token)
         );
+    }
+
+    if (lstatus == LEXER_END) {
+        puts("End of lexer");
+    }
+    else {
+        die("Bad lexer status: %d\n", lstatus);
     }
 }
 
@@ -229,9 +255,7 @@ int main(void) {
 #if 0
     test_splitter();
 #endif
-#if 0
     test_lexer();
-#endif
 
     return EXIT_SUCCESS;
 }

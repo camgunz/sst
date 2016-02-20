@@ -43,8 +43,8 @@ SSliceStatus sslice_base_assign(SSlice *s, char *cs, bool validate) {
         cursor.data = cs;
         cursor.len = strlen(cs);
 
-        while (true) {
-            bytes_read = utf8proc_iterate(cursor.data, cursor.len, &cc);
+        while (cursor.len > 0) {
+            bytes_read = utf8proc_iterate(cursor.data, sizeof(int32_t), &cc);
 
             if (bytes_read < 1) {
                 switch (bytes_read) {
@@ -145,7 +145,7 @@ SSliceStatus sslice_get_first_rune(SSlice *s, rune *r) {
         return SSLICE_END;
     }
 
-    bytes_read = utf8proc_iterate(s->data, s->len, &r2);
+    bytes_read = utf8proc_iterate(s->data, sizeof(rune), &r2);
 
     if (bytes_read < 1) {
         switch (bytes_read) {
@@ -183,7 +183,7 @@ SSliceStatus sslice_advance_rune(SSlice *s) {
         return SSLICE_END;
     }
 
-    bytes_read = utf8proc_iterate(s->data, s->len, &r);
+    bytes_read = utf8proc_iterate(s->data, sizeof(rune), &r);
 
     if (bytes_read < 1) {
         switch (bytes_read) {
@@ -239,7 +239,7 @@ SSliceStatus sslice_pop_rune(SSlice *s, rune *r) {
         return SSLICE_END;
     }
 
-    bytes_read = utf8proc_iterate(s->data, s->len, &r2);
+    bytes_read = utf8proc_iterate(s->data, sizeof(rune), &r2);
 
     if (bytes_read < 1) {
         switch (bytes_read) {
@@ -267,7 +267,9 @@ SSliceStatus sslice_pop_rune(SSlice *s, rune *r) {
     s->data += bytes_read;
     s->len -= bytes_read;
 
-    *r = r2;
+    if (r) {
+        *r = r2;
+    }
 
     return SSLICE_OK;
 }
