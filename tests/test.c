@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "rune.h"
+#include "sslice.h"
 #include "str.h"
 #include "lexer.h"
 #include "value.h"
@@ -52,7 +53,6 @@ void test_mpd(void) {
 
     mpd_qset_string(n, NUMBER1, &ctx, &res);
 
-    mpd_strtofr(n, NUMBER1, NULL, 0, MPFR_RNDZ);
     sn = mpd_to_sci(n, 0);
 
     printf("Number: %s\n", sn);
@@ -61,40 +61,41 @@ void test_mpd(void) {
     mpd_del(n);
 }
 
-void test_string(void) {
-    String s;
+void test_sslice(void) {
+    SSlice s;
     char *cs = strdup(NUMBER1);
-    uint32_t uc;
+    rune r;
 
     sslice_assign(&s, cs);
     printf("Equals: %u\n", sslice_equals(&s, cs));
     printf("Starts with 8234: %u\n", sslice_starts_with(&s, "8234"));
-    printf("String length: %u\n", s.len);
+    printf("SSlice length: %u\n", s.len);
 
-    sslice_first_char(&s, &uc);
-    printf("First char: %c\n", uc);
+    sslice_get_first_rune(&s, &r);
+    printf("First char: %c\n", r);
 
-    uc = 0;
+    r = 0;
 
-    sslice_pop_char(&s, &uc);
-    printf("Popped first char: %c\n", uc);
-    printf("String length: %u\n", s.len);
+    sslice_pop_rune(&s, &r);
+    printf("Popped first char: %c\n", r);
+    printf("SSlice length: %u\n", s.len);
 
-    printf("Second char is '2': %u\n", sslice_first_char_equals(&s, '2'));
+    printf("Second char is '2': %u\n", sslice_first_rune_equals(&s, '2'));
 
-    sslice_pop_char_if_equals(&s, '2');
-    printf("Second char: %u\n", sslice_first_char_equals(&s, '2'));
-    printf("String length: %u\n", s.len);
+    sslice_pop_rune_if_equals(&s, '2');
+    printf("Second char: %u\n", sslice_first_rune_equals(&s, '2'));
+    printf("SSlice length: %u\n", s.len);
 
-    sslice_pop_char_if_digit(&s, &uc);
-    printf("Third char: %c\n", uc);
-    printf("String length: %u\n", s.len);
+    sslice_pop_rune_if_digit(&s, &r);
+    printf("Third char: %c\n", r);
+    printf("SSlice length: %u\n", s.len);
 
-    sslice_pop_char_if_alnum(&s, &uc);
-    printf("Fourth char: %c\n", uc);
-    printf("String length: %u\n", s.len);
+    sslice_pop_rune_if_alnum(&s, &r);
+    printf("Fourth char: %c\n", r);
+    printf("SSlice length: %u\n", s.len);
 
-    printf("Find 0: %s\n", sslice_find(&s, '0'));
+    sslice_seek_to(&s, '0');
+    printf("Find 0: %s\n", s.data);
 }
 
 void test_add(void) {
@@ -104,13 +105,17 @@ void test_add(void) {
     String s1;
     String s2;
     char *result;
+    mpd_context_t mpd_ctx;
 
-    value_init(&v1);
-    value_init(&v2);
-    value_init(&v3);
+    mpd_maxcontext(&mpd_ctx);
 
-    sslice_assign(&s1, NUMBER1);
-    sslice_assign(&s2, NUMBER2);
+    /*
+    value_init(&v1, &mpd_ctx);
+    value_init(&v2, &mpd_ctx);
+    value_init(&v3, &mpd_ctx);
+
+    string_assign(&s1, NUMBER1);
+    string_assign(&s2, NUMBER2);
 
     value_set_number(&v1, &s1);
     value_set_number(&v2, &s2);
@@ -119,8 +124,10 @@ void test_add(void) {
     value_as_string(&result, &v3);
 
     printf("Result: %s + %s = %s\n", NUMBER1, NUMBER2, result);
+    */
 }
 
+#if 0
 void test_splitter(void) {
     Splitter splitter;
 
@@ -137,6 +144,7 @@ void test_splitter(void) {
         }
     }
 }
+#endif
 
 static const char *token_types[TOKEN_MAX] = {
     "Unknown",
@@ -193,40 +201,33 @@ static char* token_to_string(Token *token) {
 }
 
 void test_lexer(void) {
-    Splitter splitter;
     Lexer lexer;
+    SSlice data;
 
-    splitter_init(&splitter, TEMPLATE);
+    sslice_assign_validate(&data, TEMPLATE);
 
-    while (splitter_load_next(&splitter)) {
-        char *code;
+    lexer_init(&lexer);
+    lexer_set_data(&lexer, &data);
 
-        if (!splitter.section_is_code) {
-            continue;
-        }
+    while (lexer_load_next_skip_whitespace(&lexer)) {
+        Token *token = lexer_get_current_token(&lexer);
 
-        code = strndup(splitter.section.data, splitter.section.len);
-
-        printf("Code: [%s]\n", code);
-
-        lexer_set_code(&lexer, &splitter.section);
-
-        while (lexer_load_next(&lexer) == LEXER_OK) {
-            printf("Token: %s [%s]\n",
-                token_types[lexer.token.type], token_to_string(&lexer.token)
-            );
-        }
-
-        free(code);
+        printf("Token: %s [%s]\n",
+            token_types[token->type], token_to_string(token)
+        );
     }
 }
 
 int main(void) {
-    test_mpfr();
-    test_string();
+    test_mpd();
+    test_sslice();
+#if 0
     test_add();
+#if 0
     test_splitter();
+#endif
     test_lexer();
+#endif
 
     return EXIT_SUCCESS;
 }

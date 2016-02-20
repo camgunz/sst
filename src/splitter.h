@@ -13,3 +13,5 @@ bool splitter_load_next(Splitter *splitter);
 
 #endif
 
+/* vi: set et ts=4 sw=4: */
+

@@ -40,3 +40,5 @@ bool rune_is_whitespace(rune r) {
     }
 }
 
+/* vi: set et ts=4 sw=4: */
+

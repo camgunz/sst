@@ -9,7 +9,7 @@
 
 #include "config.h"
 #include "rune.h"
-#include "str.h"
+#include "sslice.h"
 #include "array.h"
 #include "parray.h"
 #include "lexer.h"
@@ -259,7 +259,7 @@ Token* token_queue_push_new(TokenQueue *token_queue) {
 
 void lexer_init(Lexer *lexer) {
     lexer_clear(lexer);
-    mpd_maxcontext(&lexer->mpd);
+    mpd_maxcontext(&lexer->mpd_ctx);
 }
 
 void lexer_clear(Lexer *lexer) {
@@ -363,7 +363,7 @@ LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace) {
             token = token_queue_push_new(&lexer->tokens);
             token->type = TOKEN_NUMBER;
 
-            mpd_qset_string(token->as.number, num, &lexer->mpd, &res);
+            mpd_qset_string(token->as.number, num, &lexer->mpd_ctx, &res);
 
             free(num);
 

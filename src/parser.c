@@ -9,7 +9,7 @@
 
 #include "config.h"
 #include "rune.h"
-#include "str.h"
+#include "sslice.h"
 #include "lexer.h"
 #include "parser.h"
 

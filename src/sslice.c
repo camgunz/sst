@@ -6,7 +6,7 @@
 
 #include "rune.h"
 #include "utils.h"
-#include "str.h"
+#include "sslice.h"
 
 static SSliceStatus encode_rune(SSlice *s, rune r) {
     uint8_t buf[4] = {0};
@@ -359,17 +359,23 @@ bool sslice_pop_rune_if_identifier(SSlice *s, rune *r) {
 SSliceStatus sslice_seek_to(SSlice *s, rune r) {
     SSlice cursor;
     SSliceStatus res;
-    rune r2;
 
     sslice_shallow_copy(&cursor, s);
 
-    res = sslice_pop_rune(&cursor, &r2);
-
-    while (res == SSLICE_OK) {
-        if (r2 == r) {
-            sslice_shallow_copy(s, &cursor);
+    while (true) {
+        if (sslice_first_rune_equals(&cursor, r)) {
             break;
         }
+
+        res = sslice_advance_rune(&cursor);
+
+        if (res != SSLICE_OK) {
+            break;
+        }
+    }
+
+    if (res == SSLICE_OK) {
+        sslice_shallow_copy(s, &cursor);
     }
 
     return res;

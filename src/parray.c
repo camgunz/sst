@@ -24,3 +24,5 @@ void parray_rotate_left(PArray *parray) {
     parray->elements[parray->count - 1] = first_element;
 }
 
+/* vi: set et ts=4 sw=4: */
+

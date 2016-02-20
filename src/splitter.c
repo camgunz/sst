@@ -6,7 +6,7 @@
 
 #include "config.h"
 #include "utils.h"
-#include "str.h"
+#include "sslice.h"
 #include "splitter.h"
 
 void splitter_clear(Splitter *splitter) {

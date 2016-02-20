@@ -34,10 +34,12 @@ bool         sslice_pop_rune_if_identifier(SSlice *s, rune *r);
 SSliceStatus sslice_seek_to(SSlice *s, rune r);
 void         sslice_shallow_copy(SSlice *dst, SSlice *src);
 bool         sslice_deep_copy(SSlice *dst, SSlice *src);
-char*        sslice_to_c_sslice(SSlice *s);
+char*        sslice_to_c_string(SSlice *s);
 
 #define sslice_assign(s, cs) sslice_base_assign(s, cs, false)
 #define sslice_assign_validate(s, cs) sslice_base_assign(s, cs, true)
 
 #endif
+
+/* vi: set et ts=4 sw=4: */
 

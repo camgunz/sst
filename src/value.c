@@ -5,50 +5,91 @@
 
 #include "config.h"
 #include "rune.h"
+#include "sslice.h"
 #include "str.h"
 #include "value.h"
 
-void value_init(Value *value) {
+ValueStatus value_init(Value *value, mpd_context_t *mpd_ctx) {
+    StringStatus status;
+
     value->type = VALUE_NONE;
-    value->string = g_string_new(NULL);
-    mpfr_init2(value->number, DEFAULT_PRECISION);
+    value->mpd_ctx = mpd_ctx;
+
+    status = string_new(&value->string, NULL);
+
+    if (status != STRING_OK) {
+        return status;
+    }
+
+    value->number = mpd_qnew();
+
+    if (!value->number) {
+        return VALUE_DATA_MEMORY_EXHAUSTED;
+    }
+
+    return VALUE_OK;
 }
 
-void value_clear(Value *value) {
-    g_string_erase(value->string, 0, -1);
-    mpfr_set_ui(value->number, 0, MPFR_RNDZ);
-    // mpfr_clear(value->number);
+ValueStatus value_clear(Value *value) {
+    uint32_t res = 0;
+
+    string_clear(value->string);
+    mpd_qset_i32(value->number, 0, value->mpd_ctx, &res);
+
+    if (res != 0) {
+        return VALUE_CONVERSION_ERROR;
+    }
+
+    return VALUE_OK;
 }
 
-void value_set_string(Value *value, String *s) {
+ValueStatus value_set_string(Value *value, String *s) {
     value_clear(value);
     value->type = VALUE_STRING;
-    g_string_append_len(value->string, s->data, s->len);
+
+    return string_append_len(value->string, s->data, s->len);
 }
 
-void value_set_number(Value *value, String *n) {
+ValueStatus value_set_number(Value *value, String *n) {
+    uint32_t res = 0;
+
     value_clear(value);
     value->type = VALUE_NUMBER;
-    mpfr_strtofr(value->number, n->data, NULL, 0, MPFR_RNDZ);
+    mpd_qset_string(value->number, n->data, value->mpd_ctx, &res);
+
+    if (res != 0) {
+        return VALUE_CONVERSION_ERROR;
+    }
+
+    return VALUE_OK;
 }
 
 ValueStatus value_add(Value *result, Value *op1, Value *op2) {
     if (op1->type == VALUE_STRING && op2->type == VALUE_STRING) {
         value_clear(result);
         result->type = VALUE_STRING;
-        g_string_append_len(
-            result->string, op1->string->str, op1->string->len
+        string_append_len(
+            result->string, op1->string->data, op1->string->len
         );
-        g_string_append_len(
-            result->string, op2->string->str, op2->string->len
+        string_append_len(
+            result->string, op2->string->data, op2->string->len
         );
         return VALUE_OK;
     }
 
     if (op1->type == VALUE_NUMBER && op2->type == VALUE_NUMBER) {
+        uint32_t res = 0;
+
         value_clear(result);
         result->type = VALUE_NUMBER;
-        mpfr_add(result->number, op1->number, op2->number, MPFR_RNDZ);
+        mpd_qadd(
+            result->number, op1->number, op2->number, result->mpd_ctx, &res
+        );
+
+        if (res != 0) {
+            return VALUE_ARITHMETIC_ERROR;
+        }
+
         return VALUE_OK;
     }
 
@@ -56,17 +97,28 @@ ValueStatus value_add(Value *result, Value *op1, Value *op2) {
 }
 
 ValueStatus value_sub(Value *result, Value *op1, Value *op2) {
+    uint32_t res = 0;
+
     if (op1->type != VALUE_NUMBER || op2->type != VALUE_NUMBER) {
         return VALUE_INVALID_TYPE;
     }
 
     value_clear(result);
     result->type = VALUE_NUMBER;
-    mpfr_sub(result->number, op1->number, op2->number, MPFR_RNDZ);
+    mpd_qsub(
+        result->number, op1->number, op2->number, result->mpd_ctx, &res
+    );
+
+    if (res != 0) {
+        return VALUE_ARITHMETIC_ERROR;
+    }
+
     return VALUE_OK;
 }
 
 ValueStatus value_mul(Value *result, Value *op1, Value *op2) {
+    uint32_t res = 0;
+
     if (op1->type != VALUE_NUMBER || op2->type != VALUE_NUMBER) {
         return VALUE_INVALID_TYPE;
     }
@@ -74,11 +126,20 @@ ValueStatus value_mul(Value *result, Value *op1, Value *op2) {
     value_clear(result);
     result->type = VALUE_NUMBER;
 
-    mpfr_mul(result->number, op1->number, op2->number, MPFR_RNDZ);
+    mpd_qmul(
+        result->number, op1->number, op2->number, result->mpd_ctx, &res
+    );
+
+    if (res != 0) {
+        return VALUE_ARITHMETIC_ERROR;
+    }
+
     return VALUE_OK;
 }
 
 ValueStatus value_div(Value *result, Value *op1, Value *op2) {
+    uint32_t res = 0;
+
     if (op1->type != VALUE_NUMBER || op2->type != VALUE_NUMBER) {
         return VALUE_INVALID_TYPE;
     }
@@ -86,11 +147,20 @@ ValueStatus value_div(Value *result, Value *op1, Value *op2) {
     value_clear(result);
     result->type = VALUE_NUMBER;
 
-    mpfr_div(result->number, op1->number, op2->number, MPFR_RNDZ);
+    mpd_qdiv(
+        result->number, op1->number, op2->number, result->mpd_ctx, &res
+    );
+
+    if (res != 0) {
+        return VALUE_ARITHMETIC_ERROR;
+    }
+
     return VALUE_OK;
 }
 
 ValueStatus value_rem(Value *result, Value *op1, Value *op2) {
+    uint32_t res = 0;
+
     if (op1->type != VALUE_NUMBER || op2->type != VALUE_NUMBER) {
         return VALUE_INVALID_TYPE;
     }
@@ -98,23 +168,29 @@ ValueStatus value_rem(Value *result, Value *op1, Value *op2) {
     value_clear(result);
     result->type = VALUE_NUMBER;
 
-    mpfr_fmod(result->number, op1->number, op2->number, MPFR_RNDZ);
+    mpd_qrem(
+        result->number, op1->number, op2->number, result->mpd_ctx, &res
+    );
+
+    if (res != 0) {
+        return VALUE_ARITHMETIC_ERROR;
+    }
+
     return VALUE_OK;
 }
 
 ValueStatus value_as_string(char **s, Value *value) {
     if (value->type == VALUE_NUMBER) {
-        mpfr_exp_t ep;
-        char *s = mpfr_get_str(NULL, &ep, 10, 0, value->number, MPFR_RNDZ);
+        *s = mpd_to_sci(value->number, 0);
 
         if (!s) {
             return VALUE_CONVERSION_ERROR;
         }
-
-        g_string_assign(value->string, s);
+    }
+    else {
+        *s = value->string->data;
     }
 
-    *s = value->string->str;
     return VALUE_OK;
 }
 

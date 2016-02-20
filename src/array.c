@@ -40,3 +40,5 @@ bool array_ensure_capacity(Array *array, size_t count) {
     return true;
 }
 
+/* vi: set et ts=4 sw=4: */
+

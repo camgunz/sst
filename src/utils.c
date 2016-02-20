@@ -49,3 +49,5 @@ void die(const char *format, ...) {
     exit(EXIT_FAILURE);
 }
 
+/* vi: set et ts=4 sw=4: */
+

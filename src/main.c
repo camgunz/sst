@@ -1,10 +1,8 @@
 #include <stdlib.h>
-
-#include <glib.h>
-#include <glib/gprintf.h>
+#include <stdio.h>
 
 int main(void) {
-    g_printf("Not quite ready yet\n");
+    printf("Not quite ready yet\n");
 
     return EXIT_SUCCESS;
 }

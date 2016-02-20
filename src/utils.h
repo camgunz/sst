@@ -19,3 +19,5 @@ char* delete_char(char *data);
 
 #endif
 
+/* vi: set et ts=4 sw=4: */
+

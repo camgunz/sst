@@ -143,7 +143,7 @@ typedef struct {
     SSlice         tag;
     bool           in_raw;
     TokenQueue     tokens;
-    mpd_context_t  mpd;
+    mpd_context_t  mpd_ctx;
 } Lexer;
 
 void        token_queue_clear(TokenQueue *token_queue);
@@ -167,4 +167,6 @@ Token*      lexer_get_current_token(Lexer *lexer);
     lexer_base_load_next(lexer, true)
 
 #endif
+
+/* vi: set et ts=4 sw=4: */
 

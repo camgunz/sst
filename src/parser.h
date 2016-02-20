@@ -108,3 +108,5 @@ ParserStatus parser_validate(Parser *parser);
 
 #endif
 
+/* vi: set et ts=4 sw=4: */
+

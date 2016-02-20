@@ -9,3 +9,5 @@ void    parray_rotate_left(PArray *parray);
 
 #endif
 
+/* vi: set et ts=4 sw=4: */
+
