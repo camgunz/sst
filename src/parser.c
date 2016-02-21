@@ -19,7 +19,7 @@ static ParserStatus parse_include(Parser *parser) {
     LexerStatus  ls;
     Token       *token;
 
-    ls = lexer_load_next_skip_whitespace(&parser->lexer);
+    ls = lexer_load_next(&parser->lexer);
 
     if (ls != LEXER_OK) {
         return ls;
@@ -89,7 +89,7 @@ ParserStatus parser_load_next(Parser *parser) {
     LexerStatus   ls;
     Token        *token;
 
-    ls = lexer_load_next_skip_whitespace(&parser->lexer);
+    ls = lexer_load_next(&parser->lexer);
 
     switch (ls) {
         case LEXER_DATA_MEMORY_EXHAUSTED:
@@ -155,55 +155,42 @@ ParserStatus parser_load_next(Parser *parser) {
     }
 
     switch (token->type) {
-         case TOKEN_SYMBOL: {
+         case TOKEN_SYMBOL:
             switch (token->as.symbol) {
-                case SYMBOL_OPAREN: {
+                case SYMBOL_OPAREN:
                     return parse_paren(parser);
-                }
-                default: {
+                default:
                     break;
-                }
             }
             break;
-        }
-        case TOKEN_KEYWORD: {
+        case TOKEN_KEYWORD:
             switch (token->as.keyword) {
-                case KEYWORD_INCLUDE: {
+                case KEYWORD_INCLUDE:
                     return parse_include(parser);
-                }
-                case KEYWORD_IF: {
+                case KEYWORD_IF:
                     return parse_conditional(parser);
-                }
-                case KEYWORD_FOR: {
+                case KEYWORD_FOR:
                     return parse_iteration(parser);
-                }
-                case KEYWORD_RAW: {
+                case KEYWORD_RAW:
                     return validate_raw(parser);
-                }
-                default: {
+                default:
                     break;
-                }
-            }
             break;
         }
-        case TOKEN_NUMBER: {
+        case TOKEN_NUMBER:
             return parse_math_expression(parser);
-        }
-        case TOKEN_IDENTIFIER: {
+        case TOKEN_IDENTIFIER:
             /* Could be a math expression also */
             return parse_expression(parser);
-        }
-        case TOKEN_UNKNOWN: {
+        case TOKEN_UNKNOWN:
             return PARSER_UNKNOWN_TOKEN;
-        }
         case TOKEN_STRING:
         case TOKEN_BOOLOP:
         case TOKEN_UNARY_BOOLOP:
         case TOKEN_MATHOP:
         case TOKEN_WHITESPACE:
-        default: {
+        default:
             break;
-        }
     }
 
     return PARSER_UNEXPECTED_TOKEN;

@@ -32,10 +32,14 @@
 "{{ raw }}\n"                                                              \
 "    This is how you would use raw }} and {{ markers.\n"                   \
 "{{ endraw }}\n"                                                           \
+"{{ if message == 'Or you can put them in strings {{ }} }} {{' }}\n"       \
+"You guessed the magic message!\n"                                         \
+"{{ endif }}\n"                                                            \
 "\n"                                                                       \
-"{{ include '/srv/http/templates/footer.txt' }}\n"
+"{{ include '/srv/http/templates/footer.txt' }}\n"                         \
+"Last little bit down here\n"
 
-#define TEMPLATE " 14 983 2876.55"
+#define NUMBERS " 14 983 2876.55 "
 
 void test_mpd(void) {
     mpd_context_t ctx;
@@ -131,100 +135,24 @@ void test_add(void) {
     printf("Result: %s + %s = %s\n", v1s, v2s, result);
 }
 
-#if 0
-void test_splitter(void) {
-    Splitter splitter;
-
-    splitter_init(&splitter, TEMPLATE);
-
-    while (splitter_load_next(&splitter)) {
-        printf("Section - is_code: %u\n", splitter.section_is_code);
-        if (splitter.section_is_code) {
-            char *code = strndup(splitter.section.data, splitter.section.len);
-
-            printf("Code: [%s]\n", code);
-
-            free(code);
-        }
-    }
-}
-#endif
-
-static const char *token_types[TOKEN_MAX] = {
-    "Unknown",
-    "Number",
-    "Keyword",
-    "Identifier",
-    "String",
-    "BoolOp",
-    "Unary BoolOp",
-    "MathOp",
-    "Symbol",
-    "Whitespace"
-};
-
-static char* token_to_string(Token *token) {
-    switch (token->type) {
-        case TOKEN_NUMBER: {
-            return mpd_to_sci(token->as.number, 0);
-        }
-        case TOKEN_KEYWORD:
-            return strdup(KeywordValues[token->as.keyword]);
-        case TOKEN_IDENTIFIER:
-            return sslice_to_c_string(&token->as.identifier);
-        case TOKEN_STRING:
-            return sslice_to_c_string(&token->as.string);
-        case TOKEN_BOOLOP:
-            return strdup(BoolOpValues[token->as.bool_op]);
-        case TOKEN_UNARY_BOOLOP:
-            return chardup('!');
-        case TOKEN_MATHOP:
-            return chardup(MathOpValues[token->as.math_op]);
-        case TOKEN_SYMBOL:
-            return chardup(SymbolValues[token->as.symbol]);
-        case TOKEN_WHITESPACE:
-            switch (token->as.whitespace) {
-                case WHITESPACE_SPACE:
-                    return strdup("<space>");
-                case WHITESPACE_TAB:
-                    return strdup("<tab>");
-                case WHITESPACE_CARRIAGE_RETURN:
-                    return strdup("<cr>");
-                case WHITESPACE_NEWLINE:
-                    return strdup("<nl>");
-                case WHITESPACE_MAX:
-                default:
-                    return strdup("<ws_unknown>");
-            }
-            break;
-        case TOKEN_UNKNOWN:
-        case TOKEN_MAX:
-        default:
-            return strdup("Unknown");
-    }
-}
-
 void test_lexer(void) {
     Lexer lexer;
     SSlice data;
     SSliceStatus status;
     LexerStatus lstatus;
+    uint16_t token_count = 0;
 
-    status = sslice_assign_validate(&data, TEMPLATE);
+    status = sslice_assign_validate(&data, REAL_TEMPLATE);
 
     if (status != SSLICE_OK) {
         die("Bad status: %d\n", status);
     }
 
-    printf("Data: %s\n", data.data);
-
     lexer_init(&lexer);
     lexer_set_data(&lexer, &data);
 
-    printf("Lexer data: %s\n", lexer.data.data);
-
     while (true) {
-        lstatus = lexer_load_next_skip_whitespace(&lexer);
+        lstatus = lexer_load_next(&lexer);
         Token *token = lexer_get_current_token(&lexer);
 
         if (lstatus != LEXER_OK) {
@@ -235,8 +163,10 @@ void test_lexer(void) {
             die("Got unknown token\n");
         }
 
+        token_count++;
+
         printf("Token: %s [%s]\n",
-            token_types[token->type], token_to_string(token)
+            TokenTypes[token->type], token_to_string(token)
         );
     }
 
@@ -252,9 +182,6 @@ int main(void) {
     test_mpd();
     test_sslice();
     test_add();
-#if 0
-    test_splitter();
-#endif
     test_lexer();
 
     return EXIT_SUCCESS;

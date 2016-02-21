@@ -12,12 +12,10 @@ bool rune_is_alpha(rune r) {
         case UTF8PROC_CATEGORY_LL:
         case UTF8PROC_CATEGORY_LT:
         case UTF8PROC_CATEGORY_LM:
-        case UTF8PROC_CATEGORY_LO: {
+        case UTF8PROC_CATEGORY_LO:
             return true;
-        }
-        default: {
+        default:
             return false;
-        }
     }
 }
 
@@ -31,12 +29,10 @@ bool rune_is_whitespace(rune r) {
     switch (category) {
         case UTF8PROC_CATEGORY_ZS:
         case UTF8PROC_CATEGORY_ZL:
-        case UTF8PROC_CATEGORY_ZP: {
+        case UTF8PROC_CATEGORY_ZP:
             return true;
-        }
-        default: {
+        default:
             return false;
-        }
     }
 }
 

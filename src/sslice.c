@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <stdint.h>
 #include <utf8proc.h>
 
 #include "rune.h"
@@ -48,24 +49,18 @@ SSliceStatus sslice_base_assign(SSlice *s, char *cs, bool validate) {
 
             if (bytes_read < 1) {
                 switch (bytes_read) {
-                    case UTF8PROC_ERROR_NOMEM: {
+                    case UTF8PROC_ERROR_NOMEM:
                         return SSLICE_MEMORY_EXHAUSTED;
-                    }
-                    case UTF8PROC_ERROR_OVERFLOW: {
+                    case UTF8PROC_ERROR_OVERFLOW:
                         return SSLICE_OVERFLOW;
-                    }
-                    case UTF8PROC_ERROR_INVALIDUTF8: {
+                    case UTF8PROC_ERROR_INVALIDUTF8:
                         return SSLICE_INVALID_UTF8;
-                    }
-                    case UTF8PROC_ERROR_NOTASSIGNED: {
+                    case UTF8PROC_ERROR_NOTASSIGNED:
                         return SSLICE_NOT_ASSIGNED;
-                    }
-                    case UTF8PROC_ERROR_INVALIDOPTS: {
+                    case UTF8PROC_ERROR_INVALIDOPTS:
                         return SSLICE_INVALID_OPTS;
-                    }
-                    default: {
+                    default:
                         return SSLICE_ERROR_UNKNOWN;
-                    }
                 }
             }
 
@@ -149,24 +144,18 @@ SSliceStatus sslice_get_first_rune(SSlice *s, rune *r) {
 
     if (bytes_read < 1) {
         switch (bytes_read) {
-            case UTF8PROC_ERROR_NOMEM: {
+            case UTF8PROC_ERROR_NOMEM:
                 return SSLICE_MEMORY_EXHAUSTED;
-            }
-            case UTF8PROC_ERROR_OVERFLOW: {
+            case UTF8PROC_ERROR_OVERFLOW:
                 return SSLICE_OVERFLOW;
-            }
-            case UTF8PROC_ERROR_INVALIDUTF8: {
+            case UTF8PROC_ERROR_INVALIDUTF8:
                 return SSLICE_INVALID_UTF8;
-            }
-            case UTF8PROC_ERROR_NOTASSIGNED: {
+            case UTF8PROC_ERROR_NOTASSIGNED:
                 return SSLICE_NOT_ASSIGNED;
-            }
-            case UTF8PROC_ERROR_INVALIDOPTS: {
+            case UTF8PROC_ERROR_INVALIDOPTS:
                 return SSLICE_INVALID_OPTS;
-            }
-            default: {
+            default:
                 return SSLICE_ERROR_UNKNOWN;
-            }
         }
     }
 
@@ -187,24 +176,18 @@ SSliceStatus sslice_advance_rune(SSlice *s) {
 
     if (bytes_read < 1) {
         switch (bytes_read) {
-            case UTF8PROC_ERROR_NOMEM: {
+            case UTF8PROC_ERROR_NOMEM:
                 return SSLICE_MEMORY_EXHAUSTED;
-            }
-            case UTF8PROC_ERROR_OVERFLOW: {
+            case UTF8PROC_ERROR_OVERFLOW:
                 return SSLICE_OVERFLOW;
-            }
-            case UTF8PROC_ERROR_INVALIDUTF8: {
+            case UTF8PROC_ERROR_INVALIDUTF8:
                 return SSLICE_INVALID_UTF8;
-            }
-            case UTF8PROC_ERROR_NOTASSIGNED: {
+            case UTF8PROC_ERROR_NOTASSIGNED:
                 return SSLICE_NOT_ASSIGNED;
-            }
-            case UTF8PROC_ERROR_INVALIDOPTS: {
+            case UTF8PROC_ERROR_INVALIDOPTS:
                 return SSLICE_INVALID_OPTS;
-            }
-            default: {
+            default:
                 return SSLICE_ERROR_UNKNOWN;
-            }
         }
     }
 
@@ -214,6 +197,20 @@ SSliceStatus sslice_advance_rune(SSlice *s) {
     }
     else {
         sslice_clear(s);
+    }
+
+    return SSLICE_OK;
+}
+
+SSliceStatus sslice_advance_runes(SSlice *s, size_t rune_count) {
+    SSliceStatus res;
+
+    for (size_t i = 0; i < rune_count; i++) {
+        res = sslice_advance_rune(s);
+
+        if (res != SSLICE_OK) {
+            return res;
+        }
     }
 
     return SSLICE_OK;
@@ -243,24 +240,18 @@ SSliceStatus sslice_pop_rune(SSlice *s, rune *r) {
 
     if (bytes_read < 1) {
         switch (bytes_read) {
-            case UTF8PROC_ERROR_NOMEM: {
+            case UTF8PROC_ERROR_NOMEM:
                 return SSLICE_MEMORY_EXHAUSTED;
-            }
-            case UTF8PROC_ERROR_OVERFLOW: {
+            case UTF8PROC_ERROR_OVERFLOW:
                 return SSLICE_OVERFLOW;
-            }
-            case UTF8PROC_ERROR_INVALIDUTF8: {
+            case UTF8PROC_ERROR_INVALIDUTF8:
                 return SSLICE_INVALID_UTF8;
-            }
-            case UTF8PROC_ERROR_NOTASSIGNED: {
+            case UTF8PROC_ERROR_NOTASSIGNED:
                 return SSLICE_NOT_ASSIGNED;
-            }
-            case UTF8PROC_ERROR_INVALIDOPTS: {
+            case UTF8PROC_ERROR_INVALIDOPTS:
                 return SSLICE_INVALID_OPTS;
-            }
-            default: {
+            default:
                 return SSLICE_ERROR_UNKNOWN;
-            }
         }
     }
 
@@ -383,6 +374,100 @@ SSliceStatus sslice_seek_to(SSlice *s, rune r) {
     return res;
 }
 
+SSliceStatus sslice_seek_to_string(SSlice *s, const char *cs) {
+    SSlice cursor;
+    SSliceStatus res;
+
+    sslice_shallow_copy(&cursor, s);
+
+    while (true) {
+        if (sslice_starts_with(&cursor, cs)) {
+            break;
+        }
+
+        res = sslice_advance_rune(&cursor);
+
+        if (res != SSLICE_OK) {
+            break;
+        }
+    }
+
+    if (res == SSLICE_OK) {
+        sslice_shallow_copy(s, &cursor);
+    }
+
+    return res;
+}
+
+SSliceStatus sslice_seek_past_subslice(SSlice *s, SSlice *subslice) {
+    return sslice_advance_bytes(s, subslice->len + 1);
+}
+
+SSliceStatus sslice_truncate_rune(SSlice *s) {
+    char *cursor;
+    size_t size = 0;
+    ssize_t bytes_read;
+    int32_t codepoint;
+
+    cursor = s->data + s->len;
+
+    while (true) {
+        cursor--;
+        size++;
+        
+        if (size == s->len) {
+            return SSLICE_END;
+        }
+
+        bytes_read = utf8proc_iterate(cursor, size, &codepoint);
+
+        if (bytes_read > 0) {
+            break;
+        }
+
+        switch (bytes_read) {
+            case UTF8PROC_ERROR_NOMEM:
+                return SSLICE_MEMORY_EXHAUSTED;
+            case UTF8PROC_ERROR_OVERFLOW:
+                return SSLICE_OVERFLOW;
+            case UTF8PROC_ERROR_NOTASSIGNED:
+                return SSLICE_NOT_ASSIGNED;
+            case UTF8PROC_ERROR_INVALIDOPTS:
+                return SSLICE_INVALID_OPTS;
+            case UTF8PROC_ERROR_INVALIDUTF8:
+            default:
+                break;
+        }
+    }
+
+    s->len -= size;
+
+    if (s->len == 0) {
+        sslice_clear(s);
+    }
+
+    return SSLICE_OK;
+}
+
+SSliceStatus sslice_truncate_runes(SSlice *s, size_t rune_count) {
+    SSlice cursor;
+    SSliceStatus res;
+
+    sslice_shallow_copy(&cursor, s);
+
+    for (size_t i = 0; i < rune_count; i++) {
+        res = sslice_truncate_rune(s);
+
+        if (res != SSLICE_OK) {
+            return res;
+        }
+    }
+
+    sslice_shallow_copy(s, &cursor);
+
+    return SSLICE_OK;
+}
+
 SSliceStatus sslice_truncate_at(SSlice *s, rune r) {
     SSlice cursor;
 
@@ -397,7 +482,7 @@ SSliceStatus sslice_truncate_at(SSlice *s, rune r) {
         }
 
         if (r2 == r) {
-            s->len = (cursor.data - s->data) + 1;
+            s->len = (cursor.data - s->data) - 2;
             return SSLICE_OK;
         }
     }
@@ -417,41 +502,22 @@ SSliceStatus sslice_truncate_at_whitespace(SSlice *s) {
         }
 
         if (rune_is_whitespace(r)) {
-            s->len = (cursor.data - s->data) + 1;
+            s->len = (cursor.data - s->data) - 2;
             return SSLICE_OK;
         }
     }
 }
 
-SSliceStatus sslice_truncate_runes(SSlice *s, size_t rune_count) {
-    SSlice cursor;
-    rune r;
-    SSliceStatus res;
+SSliceStatus sslice_truncate_at_subslice(SSlice *s, SSlice *subslice) {
+    size_t new_len = (subslice->data - s->data) - 1;
 
-    sslice_shallow_copy(&cursor, s);
-
-    cursor.data += (cursor.len - 1);
-    cursor.len = 1;
-
-    while (true) {
-        res = sslice_get_first_rune(&cursor, &r);
-
-        if (res == SSLICE_OK) {
-            if (rune_count == 1) {
-                return SSLICE_OK;
-            }
-
-            rune_count--;
-        }
-        else if (res == SSLICE_INVALID_UTF8) {
-            cursor.data--;
-            cursor.len++;
-
-            if (cursor.data == s->data) {
-                return SSLICE_END;
-            }
-        }
+    if (new_len >= s->len) {
+        return SSLICE_END;
     }
+
+    s->len = new_len;
+
+    return SSLICE_OK;
 }
 
 void sslice_shallow_copy(SSlice *dst, SSlice *src) {

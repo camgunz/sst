@@ -131,6 +131,7 @@ extern const rune  SymbolValues[SYMBOL_MAX];
 extern const rune  WhitespaceValues[WHITESPACE_MAX];
 extern const char *BoolOpValues[BOOLOP_MAX];
 extern const char *KeywordValues[KEYWORD_MAX];
+extern const char *TokenTypes[TOKEN_MAX];
 
 typedef struct {
     uint8_t head;
@@ -141,10 +142,14 @@ typedef struct {
 typedef struct {
     SSlice         data;
     SSlice         tag;
-    bool           in_raw;
+    bool           in_code;
     TokenQueue     tokens;
     mpd_context_t  mpd_ctx;
 } Lexer;
+
+LexerStatus token_clear(Token *token);
+LexerStatus token_copy(Token *dst, Token *src);
+char*       token_to_string(Token *token);
 
 void        token_queue_clear(TokenQueue *token_queue);
 uint8_t     token_queue_count(TokenQueue *token_queue);
@@ -157,14 +162,10 @@ Token*      token_queue_push_new(TokenQueue *token_queue);
 void        lexer_init(Lexer *lexer);
 void        lexer_clear(Lexer *lexer);
 void        lexer_set_data(Lexer *lexer, SSlice *data);
-LexerStatus lexer_base_load_next(Lexer *lexer, bool skip_whitespace);
+LexerStatus lexer_load_next(Lexer *lexer);
+Token*      lexer_get_previous_token(Lexer *lexer);
+Token*      lexer_get_previous_token(Lexer *lexer);
 Token*      lexer_get_current_token(Lexer *lexer);
-
-#define lexer_load_next(lexer) \
-    lexer_base_load_next(lexer, false)
-
-#define lexer_load_next_skip_whitespace(lexer) \
-    lexer_base_load_next(lexer, true)
 
 #endif
 
