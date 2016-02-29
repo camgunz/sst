@@ -327,7 +327,7 @@ static LexerStatus lexer_handle_keyword_or_identifier(Lexer *lexer) {
             token->as.keyword = kw;
 
             return sslice_advance_bytes(
-                &lexer->data, strlen(KeywordValues[kw])
+                &lexer->data, start.len
             );
         }
     }
