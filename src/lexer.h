@@ -164,7 +164,6 @@ void        lexer_clear(Lexer *lexer);
 void        lexer_set_data(Lexer *lexer, SSlice *data);
 LexerStatus lexer_load_next(Lexer *lexer);
 Token*      lexer_get_previous_token(Lexer *lexer);
-Token*      lexer_get_previous_token(Lexer *lexer);
 Token*      lexer_get_current_token(Lexer *lexer);
 
 #endif

@@ -12,6 +12,7 @@
 #include "sslice.h"
 #include "str.h"
 #include "lexer.h"
+#include "parser.h"
 #include "value.h"
 #include "utils.h"
 
@@ -138,32 +139,32 @@ void test_add(void) {
 void test_lexer(void) {
     Lexer lexer;
     SSlice data;
-    SSliceStatus status;
+    SSliceStatus sstatus;
     LexerStatus lstatus;
-    uint16_t token_count = 0;
 
-    status = sslice_assign_validate(&data, REAL_TEMPLATE);
+    sstatus = sslice_assign_validate(&data, REAL_TEMPLATE);
 
-    if (status != SSLICE_OK) {
-        die("Bad status: %d\n", status);
+    if (sstatus != SSLICE_OK) {
+        die("Error loading template into SSlice: %d", sstatus);
     }
 
     lexer_init(&lexer);
     lexer_set_data(&lexer, &data);
 
     while (true) {
+        Token *token;
+        
         lstatus = lexer_load_next(&lexer);
-        Token *token = lexer_get_current_token(&lexer);
 
         if (lstatus != LEXER_OK) {
             break;
         }
 
+        token = lexer_get_current_token(&lexer);
+
         if (token->type == TOKEN_UNKNOWN) {
             die("Got unknown token\n");
         }
-
-        token_count++;
 
         printf("Token: %s [%s]\n",
             TokenTypes[token->type], token_to_string(token)
@@ -178,11 +179,36 @@ void test_lexer(void) {
     }
 }
 
+void test_parser(void) {
+    Parser parser;
+    SSlice data;
+    SSliceStatus sstatus;
+
+    sstatus = sslice_assign_validate(&data, REAL_TEMPLATE);
+
+    if (sstatus != SSLICE_OK) {
+        die("Error loading template into SSlice: %d", sstatus);
+    }
+
+    parser_init(&parser, &data);
+
+    while (true) {
+        ParserStatus pstatus = parser_load_next(&parser);
+
+        if (pstatus != PARSER_OK) {
+            break;
+        }
+
+        printf("Block: %s\n", BlockTypes[parser.block.type]);
+    }
+}
+
 int main(void) {
     test_mpd();
     test_sslice();
     test_add();
     test_lexer();
+    test_parser();
 
     return EXIT_SUCCESS;
 }

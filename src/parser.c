@@ -15,6 +15,15 @@
 
 #define TOKEN_ALLOC_COUNT 1000
 
+const char *BlockTypes[BLOCK_MAX] = {
+    "Text",
+    "Include",
+    "Expression",
+    "Conditional",
+    "Iteration",
+    "Raw"
+};
+
 static ParserStatus parse_include(Parser *parser) {
     LexerStatus  ls;
     Token       *token;
@@ -91,25 +100,8 @@ ParserStatus parser_load_next(Parser *parser) {
 
     ls = lexer_load_next(&parser->lexer);
 
-    switch (ls) {
-        case LEXER_DATA_MEMORY_EXHAUSTED:
-            return PARSER_DATA_MEMORY_EXHAUSTED;
-        case LEXER_DATA_OVERFLOW:
-            return PARSER_DATA_OVERFLOW;
-        case LEXER_DATA_INVALID_UTF8:
-            return PARSER_DATA_INVALID_UTF8;
-        case LEXER_DATA_NOT_ASSIGNED:
-            return PARSER_DATA_NOT_ASSIGNED;
-        case LEXER_DATA_INVALID_OPTS:
-            return PARSER_DATA_INVALID_OPTS;
-        case LEXER_END:
-            return PARSER_END;
-        case LEXER_UNKNOWN_TOKEN:
-            return PARSER_UNKNOWN_TOKEN;
-        case LEXER_INVALID_NUMBER_FORMAT:
-            return PARSER_INVALID_NUMBER_FORMAT;
-        default:
-            break;
+    if (ls != LEXER_OK) {
+        return ls;
     }
 
     /*

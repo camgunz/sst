@@ -44,6 +44,8 @@ typedef struct {
     } as;
 } Block;
 
+extern const char *BlockTypes[BLOCK_MAX];
+
 #if 0
 
 typedef SSlice IdentifierExpression;
@@ -104,7 +106,7 @@ typedef struct {
 } Parser;
 
 void         parser_init(Parser *parser, SSlice *code);
-ParserStatus parser_validate(Parser *parser);
+ParserStatus parser_load_next(Parser *parser);
 
 #endif
 

@@ -640,7 +640,7 @@ void token_queue_clear(TokenQueue *token_queue) {
     token_queue->tail = 0;
 
     for (int i = 0; i < TOKEN_QUEUE_SIZE; i++) {
-        token_clear(&token_queue->tokens[i]);
+        token_queue->tokens[i].type = TOKEN_UNKNOWN;
     }
 }
 
