@@ -36,7 +36,7 @@ char* chardup(rune r) {
         return NULL;
     }
 
-    return strndup(&buf[0], bytes_written);
+    return strndup((const char *)&buf[0], bytes_written);
 }
 
 void die(const char *format, ...) {

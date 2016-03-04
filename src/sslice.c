@@ -9,32 +9,6 @@
 #include "utils.h"
 #include "sslice.h"
 
-static SSliceStatus encode_rune(SSlice *s, rune r) {
-    uint8_t buf[4] = {0};
-    ssize_t bytes_written;
-
-    if (s->len < 4) {
-        return SSLICE_OVERFLOW;
-    }
-
-    if (!utf8proc_codepoint_valid(r)) {
-        return SSLICE_INVALID_UTF8;
-    }
-
-    bytes_written = utf8proc_encode_char(r, &buf[0]);
-
-    if (bytes_written < 1) {
-        return SSLICE_ERROR_UNKNOWN;
-    }
-
-    for (int i = 0; i < bytes_written; i++) {
-        s->data[i] = buf[i];
-    }
-    s->len = bytes_written;
-
-    return SSLICE_OK;
-}
-
 SSliceStatus sslice_base_assign(SSlice *s, char *cs, bool validate) {
     if (validate) {
         SSlice cursor;
@@ -45,7 +19,9 @@ SSliceStatus sslice_base_assign(SSlice *s, char *cs, bool validate) {
         cursor.len = strlen(cs);
 
         while (cursor.len > 0) {
-            bytes_read = utf8proc_iterate(cursor.data, sizeof(int32_t), &cc);
+            bytes_read = utf8proc_iterate(
+                (const unsigned char *)cursor.data, sizeof(int32_t), &cc
+            );
 
             if (bytes_read < 1) {
                 switch (bytes_read) {
@@ -140,7 +116,9 @@ SSliceStatus sslice_get_first_rune(SSlice *s, rune *r) {
         return SSLICE_END;
     }
 
-    bytes_read = utf8proc_iterate(s->data, sizeof(rune), &r2);
+    bytes_read = utf8proc_iterate(
+        (const unsigned char *)s->data, sizeof(rune), &r2
+    );
 
     if (bytes_read < 1) {
         switch (bytes_read) {
@@ -172,7 +150,9 @@ SSliceStatus sslice_advance_rune(SSlice *s) {
         return SSLICE_END;
     }
 
-    bytes_read = utf8proc_iterate(s->data, sizeof(rune), &r);
+    bytes_read = utf8proc_iterate(
+        (const unsigned char *)s->data, sizeof(rune), &r
+    );
 
     if (bytes_read < 1) {
         switch (bytes_read) {
@@ -236,7 +216,9 @@ SSliceStatus sslice_pop_rune(SSlice *s, rune *r) {
         return SSLICE_END;
     }
 
-    bytes_read = utf8proc_iterate(s->data, sizeof(rune), &r2);
+    bytes_read = utf8proc_iterate(
+        (const unsigned char *)s->data, sizeof(rune), &r2
+    );
 
     if (bytes_read < 1) {
         switch (bytes_read) {
@@ -419,7 +401,9 @@ SSliceStatus sslice_truncate_rune(SSlice *s) {
             return SSLICE_END;
         }
 
-        bytes_read = utf8proc_iterate(cursor, size, &codepoint);
+        bytes_read = utf8proc_iterate(
+            (const unsigned char *)cursor, size, &codepoint
+        );
 
         if (bytes_read > 0) {
             break;

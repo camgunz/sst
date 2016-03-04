@@ -73,7 +73,7 @@ void test_sslice(void) {
     sslice_assign(&s, cs);
     printf("Equals: %u\n", sslice_equals(&s, cs));
     printf("Starts with 8234: %u\n", sslice_starts_with(&s, "8234"));
-    printf("SSlice length: %u\n", s.len);
+    printf("SSlice length: %zu\n", s.len);
 
     sslice_get_first_rune(&s, &r);
     printf("First char: %c\n", r);
@@ -82,21 +82,21 @@ void test_sslice(void) {
 
     sslice_pop_rune(&s, &r);
     printf("Popped first char: %c\n", r);
-    printf("SSlice length: %u\n", s.len);
+    printf("SSlice length: %zu\n", s.len);
 
     printf("Second char is '2': %u\n", sslice_first_rune_equals(&s, '2'));
 
     sslice_pop_rune_if_equals(&s, '2');
     printf("Second char: %u\n", sslice_first_rune_equals(&s, '2'));
-    printf("SSlice length: %u\n", s.len);
+    printf("SSlice length: %zu\n", s.len);
 
     sslice_pop_rune_if_digit(&s, &r);
     printf("Third char: %c\n", r);
-    printf("SSlice length: %u\n", s.len);
+    printf("SSlice length: %zu\n", s.len);
 
     sslice_pop_rune_if_alnum(&s, &r);
     printf("Fourth char: %c\n", r);
-    printf("SSlice length: %u\n", s.len);
+    printf("SSlice length: %zu\n", s.len);
 
     sslice_seek_to(&s, '0');
     printf("Find 0: %s\n", s.data);
