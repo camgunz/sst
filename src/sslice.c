@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <stdint.h>
@@ -9,18 +10,28 @@
 #include "utils.h"
 #include "sslice.h"
 
+void sslice_print(SSlice *s) {
+    char *as_string = sslice_to_c_string(s);
+
+    printf("[%s] (%zu)\n", as_string, s->len);
+
+    free(as_string);
+}
+
 SSliceStatus sslice_base_assign(SSlice *s, char *cs, bool validate) {
+    size_t slen = strlen(cs);
+
     if (validate) {
         SSlice cursor;
         int32_t cc;
         ssize_t bytes_read;
 
         cursor.data = cs;
-        cursor.len = strlen(cs);
+        cursor.len = slen;
 
         while (cursor.len > 0) {
             bytes_read = utf8proc_iterate(
-                (const unsigned char *)cursor.data, sizeof(int32_t), &cc
+                (const unsigned char *)cursor.data, cursor.len, &cc
             );
 
             if (bytes_read < 1) {
@@ -46,7 +57,7 @@ SSliceStatus sslice_base_assign(SSlice *s, char *cs, bool validate) {
     }
 
     s->data = cs;
-    s->len = strlen(cs);
+    s->len = slen;
 
     return SSLICE_OK;
 }
@@ -117,7 +128,7 @@ SSliceStatus sslice_get_first_rune(SSlice *s, rune *r) {
     }
 
     bytes_read = utf8proc_iterate(
-        (const unsigned char *)s->data, sizeof(rune), &r2
+        (const unsigned char *)s->data, s->len, &r2
     );
 
     if (bytes_read < 1) {
@@ -151,7 +162,7 @@ SSliceStatus sslice_advance_rune(SSlice *s) {
     }
 
     bytes_read = utf8proc_iterate(
-        (const unsigned char *)s->data, sizeof(rune), &r
+        (const unsigned char *)s->data, s->len, &r
     );
 
     if (bytes_read < 1) {
@@ -174,12 +185,12 @@ SSliceStatus sslice_advance_rune(SSlice *s) {
     if (bytes_read < (ssize_t)s->len) {
         s->data += bytes_read;
         s->len -= bytes_read;
-    }
-    else {
-        sslice_clear(s);
+        return SSLICE_OK;
     }
 
-    return SSLICE_OK;
+    sslice_clear(s);
+
+    return SSLICE_END;
 }
 
 SSliceStatus sslice_advance_runes(SSlice *s, size_t rune_count) {
@@ -196,18 +207,6 @@ SSliceStatus sslice_advance_runes(SSlice *s, size_t rune_count) {
     return SSLICE_OK;
 }
 
-SSliceStatus sslice_advance_bytes(SSlice *s, size_t byte_count) {
-    if (byte_count >= s->len) {
-        sslice_clear(s);
-    }
-    else {
-        s->data += byte_count;
-        s->len -= byte_count;
-    }
-
-    return SSLICE_OK;
-}
-
 SSliceStatus sslice_pop_rune(SSlice *s, rune *r) {
     rune r2;
     ssize_t bytes_read;
@@ -217,7 +216,7 @@ SSliceStatus sslice_pop_rune(SSlice *s, rune *r) {
     }
 
     bytes_read = utf8proc_iterate(
-        (const unsigned char *)s->data, sizeof(rune), &r2
+        (const unsigned char *)s->data, s->len, &r2
     );
 
     if (bytes_read < 1) {
@@ -382,55 +381,60 @@ SSliceStatus sslice_seek_to_string(SSlice *s, const char *cs) {
 }
 
 SSliceStatus sslice_seek_past_subslice(SSlice *s, SSlice *subslice) {
-    return sslice_advance_bytes(s, subslice->len + 1);
-}
+    size_t byte_count = subslice->len + 1;
 
-SSliceStatus sslice_truncate_rune(SSlice *s) {
-    char *cursor;
-    size_t size = 0;
-    ssize_t bytes_read;
-    int32_t codepoint;
-
-    cursor = s->data + s->len;
-
-    while (true) {
-        cursor--;
-        size++;
-        
-        if (size == s->len) {
-            return SSLICE_END;
-        }
-
-        bytes_read = utf8proc_iterate(
-            (const unsigned char *)cursor, size, &codepoint
-        );
-
-        if (bytes_read > 0) {
-            break;
-        }
-
-        switch (bytes_read) {
-            case UTF8PROC_ERROR_NOMEM:
-                return SSLICE_MEMORY_EXHAUSTED;
-            case UTF8PROC_ERROR_OVERFLOW:
-                return SSLICE_OVERFLOW;
-            case UTF8PROC_ERROR_NOTASSIGNED:
-                return SSLICE_NOT_ASSIGNED;
-            case UTF8PROC_ERROR_INVALIDOPTS:
-                return SSLICE_INVALID_OPTS;
-            case UTF8PROC_ERROR_INVALIDUTF8:
-            default:
-                break;
-        }
-    }
-
-    s->len -= size;
-
-    if (s->len == 0) {
+    if (byte_count >= s->len) {
         sslice_clear(s);
+    }
+    else {
+        s->data += byte_count;
+        s->len -= byte_count;
     }
 
     return SSLICE_OK;
+}
+
+void sslice_print_runes(SSlice *s) {
+    SSlice copy;
+
+    sslice_shallow_copy(&copy, s);
+
+    while (true) {
+        SSliceStatus sstatus;
+        rune r;
+
+        sstatus = sslice_pop_rune(s, &r);
+
+        if (sstatus != SSLICE_OK) {
+            puts("");
+        }
+
+        printf("%c ", r);
+    }
+    puts("");
+}
+
+SSliceStatus sslice_truncate_rune(SSlice *s) {
+    SSlice       copy;
+    SSlice       saved;
+    SSliceStatus sstatus;
+
+    sslice_shallow_copy(&copy, s);
+
+    while (true) {
+        sslice_shallow_copy(&saved, &copy);
+        sstatus = sslice_advance_rune(&copy);
+
+        if (sstatus == SSLICE_END) {
+            return sslice_truncate_at_subslice(s, &saved);
+        }
+
+        if (sstatus != SSLICE_OK) {
+            break;
+        }
+    }
+
+    return sstatus;
 }
 
 SSliceStatus sslice_truncate_runes(SSlice *s, size_t rune_count) {
@@ -454,19 +458,24 @@ SSliceStatus sslice_truncate_runes(SSlice *s, size_t rune_count) {
 
 SSliceStatus sslice_truncate_at(SSlice *s, rune r) {
     SSlice cursor;
+    SSlice previous;
 
     sslice_shallow_copy(&cursor, s);
 
     while (true) {
         rune r2;
-        SSliceStatus res = sslice_pop_rune(&cursor, &r2);
+        SSliceStatus res;
+
+        sslice_shallow_copy(&previous, &cursor);
+
+        res = sslice_pop_rune(&cursor, &r2);
 
         if (res != SSLICE_OK) {
             return res;
         }
 
         if (r2 == r) {
-            s->len = (cursor.data - s->data) - 1;
+            s->len = previous.data - s->data;
             return SSLICE_OK;
         }
     }
@@ -474,26 +483,37 @@ SSliceStatus sslice_truncate_at(SSlice *s, rune r) {
 
 SSliceStatus sslice_truncate_at_whitespace(SSlice *s) {
     SSlice cursor;
+    SSlice previous;
 
     sslice_shallow_copy(&cursor, s);
 
     while (true) {
         rune r;
-        SSliceStatus res = sslice_pop_rune(&cursor, &r);
+        SSliceStatus res;
+
+        sslice_shallow_copy(&previous, &cursor);
+
+        res = sslice_pop_rune(&cursor, &r);
 
         if (res != SSLICE_OK) {
             return res;
         }
 
         if (rune_is_whitespace(r)) {
-            s->len = (cursor.data - s->data) - 1;
+            s->len = previous.data - s->data;
             return SSLICE_OK;
         }
     }
 }
 
 SSliceStatus sslice_truncate_at_subslice(SSlice *s, SSlice *subslice) {
-    size_t new_len = (subslice->data - s->data) - 1;
+    size_t new_len;
+
+    if (subslice->data <= s->data) {
+        return SSLICE_END;
+    }
+
+    new_len = subslice->data - s->data;
 
     if (new_len >= s->len) {
         return SSLICE_END;
@@ -510,7 +530,7 @@ void sslice_shallow_copy(SSlice *dst, SSlice *src) {
 }
 
 bool sslice_deep_copy(SSlice *dst, SSlice *src) {
-    char *data = strndup(src->data, src->len);
+    char *data = bufdup(src->data, src->len);
 
     if (!data) {
         return false;
@@ -523,7 +543,12 @@ bool sslice_deep_copy(SSlice *dst, SSlice *src) {
 }
 
 char* sslice_to_c_string(SSlice *s) {
-    return strndup(s->data, s->len);
+    size_t len = s->len + 1;
+    char *str = calloc(len, sizeof(char));
+
+    memcpy(str, s->data, s->len);
+
+    return str;
 }
 
 /* vi: set et ts=4 sw=4: */

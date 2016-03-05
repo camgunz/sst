@@ -9,22 +9,31 @@
 #include "config.h"
 #include "rune.h"
 
-char* _strndup(const char *cs, size_t maxlen) {
-    size_t requested_size = maxlen + 1;
-    char *s = malloc(requested_size * sizeof(char));
+char* _strdup(const char *cs) {
+    size_t len = strlen(cs) + 1;
+    char *str = calloc(len, sizeof(char));
 
-    strncpy(s, cs, requested_size);
+    if (!str) {
+        return NULL;
+    }
 
-    return s;
+    memcpy(str, cs, len - 1);
+
+    return str;
 }
 
-char* _strdup(const char *cs) {
-    return strndup(cs, strlen(cs));
+char* bufdup(const char *buf, size_t size) {
+    char *newbuf = malloc(size);
+
+    memcpy(newbuf, buf, size);
+
+    return newbuf;
 }
 
 char* chardup(rune r) {
-    uint8_t buf[4] = {0};
-    ssize_t bytes_written;
+    uint8_t  buf[4] = {0};
+    ssize_t  bytes_written;
+    char    *s;
 
     if (!utf8proc_codepoint_valid(r)) {
         return NULL;
@@ -36,7 +45,15 @@ char* chardup(rune r) {
         return NULL;
     }
 
-    return strndup((const char *)&buf[0], bytes_written);
+    s = calloc(bytes_written + 1, sizeof(char));
+
+    if (!s) {
+        return NULL;
+    }
+
+    memcpy(s, &buf[0], bytes_written);
+
+    return s;
 }
 
 void die(const char *format, ...) {

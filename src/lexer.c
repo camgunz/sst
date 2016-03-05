@@ -217,9 +217,7 @@ static LexerStatus lexer_handle_keyword_or_identifier(Lexer *lexer) {
             token->type = TOKEN_KEYWORD;
             token->as.keyword = kw;
 
-            return sslice_advance_bytes(
-                &lexer->data, start.len
-            );
+            return sslice_advance_runes(&lexer->data, start.len);
         }
     }
 
@@ -598,7 +596,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
             return sstatus;
         }
 
-        sslice_advance_bytes(&lexer->data, 12);
+        sslice_advance_runes(&lexer->data, 12);
 
         return LEXER_OK;
     }

@@ -11,7 +11,6 @@ typedef enum {
     BLOCK_EXPRESSION,
     BLOCK_CONDITIONAL,
     BLOCK_ITERATION,
-    BLOCK_RAW,
     BLOCK_MAX
 } BlockType;
 
@@ -21,7 +20,6 @@ typedef SSlice Text;
  * {{ include "path/to/template.html" }}
  */
 typedef struct {
-    SSlice tag;
     SSlice path;
 } IncludeStatement;
 
@@ -34,6 +32,8 @@ typedef struct {
 } Block;
 
 extern const char *BlockTypes[BLOCK_MAX];
+
+char* block_to_string(Block *block);
 
 #endif
 

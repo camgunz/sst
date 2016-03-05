@@ -20,6 +20,10 @@
 
 #define NUMBER1 "82349023489234902342323419041892349034189341.796"
 #define NUMBER2 "13982309378334023462303455668934502028340345.289"
+#define NUMBER3 "96331332867568925804626874710826851062529687.085"
+#define NUMBER4      "023489234902342323419041892349034189341.796"
+#define NUMBER5       "23489234902342323419041892349034189341.796"
+#define NUMBER6       "23489234902342323419041892349034189341.79"
 
 #define REAL_TEMPLATE \
 "{{ include '/srv/http/templates/header.txt' }}\n"                         \
@@ -43,6 +47,7 @@
 "Last little bit down here\n"
 
 #define NUMBERS " 14 983 2876.55 "
+#define STRING  "'This is a string'"
 
 void test_mpd(void) {
     mpd_context_t ctx;
@@ -62,7 +67,9 @@ void test_mpd(void) {
 
     sn = mpd_to_sci(n, 0);
 
-    printf("Number: %s\n", sn);
+    if (strcmp(sn, "82349023489234902342323419041892349034189341.796") != 0) {
+        die("Failed converting number to string\n");
+    }
 
     free(sn);
     mpd_del(n);
@@ -70,39 +77,129 @@ void test_mpd(void) {
 
 void test_sslice(void) {
     SSlice s;
+    SSlice s2;
     char *cs = strdup(NUMBER1);
     rune r;
 
     sslice_assign(&s, cs);
-    printf("Equals: %u\n", sslice_equals(&s, cs));
-    printf("Starts with 8234: %u\n", sslice_starts_with(&s, "8234"));
-    printf("SSlice length: %zu\n", s.len);
+
+    if (!sslice_equals(&s, cs)) {
+        die("sslice_equals failed\n");
+    }
+
+    if (!sslice_starts_with(&s, "8234")) {
+        die("sslice_starts_with failed\n");
+    }
+
+    if (s.len != 48) {
+        die("sslice length != 48 (%zu)\n", s.len);
+    }
 
     sslice_get_first_rune(&s, &r);
-    printf("First char: %c\n", r);
+
+    if (r != '8') {
+        die("First rune was not '8'\n");
+    }
 
     r = 0;
 
     sslice_pop_rune(&s, &r);
-    printf("Popped first char: %c\n", r);
-    printf("SSlice length: %zu\n", s.len);
 
-    printf("Second char is '2': %u\n", sslice_first_rune_equals(&s, '2'));
+    if (r != '8') {
+        die("Popped rune was not '8'\n");
+    }
+
+    if (s.len != 47) {
+        die("sslice length != 47) (%zu)\n", s.len);
+    }
+
+    if (!sslice_first_rune_equals(&s, '2')) {
+        die("Next rune was not '2'\n");
+    }
 
     sslice_pop_rune_if_equals(&s, '2');
-    printf("Second char: %u\n", sslice_first_rune_equals(&s, '2'));
-    printf("SSlice length: %zu\n", s.len);
+
+    if (sslice_first_rune_equals(&s, '2')) {
+        die("Failed to pop rune '2'\n");
+    }
+
+    if (!sslice_first_rune_equals(&s, '3')) {
+        die("Third rune was not '3'\n");
+    }
+
+    if (s.len != 46) {
+        die("sslice length != 46\n");
+    }
 
     sslice_pop_rune_if_digit(&s, &r);
-    printf("Third char: %c\n", r);
-    printf("SSlice length: %zu\n", s.len);
+
+    if (r != '3') {
+        die("Popped rune was not 3\n");
+    }
+
+    if (s.len != 45) {
+        die("sslice length != 45\n");
+    }
 
     sslice_pop_rune_if_alnum(&s, &r);
-    printf("Fourth char: %c\n", r);
-    printf("SSlice length: %zu\n", s.len);
+
+    if (r != '4') {
+        die("Popped rune was not 4\n");
+    }
+
+    if (s.len != 44) {
+        die("sslice length != 44\n");
+    }
 
     sslice_seek_to(&s, '0');
-    printf("Find 0: %s\n", s.data);
+
+    if (!sslice_first_rune_equals(&s, '0')) {
+        die("Failed to seek to '0'\n");
+    }
+
+    if (!sslice_equals(&s, NUMBER4)) {
+        die("2nd sslice_equals failed\n");
+    }
+
+    sslice_shallow_copy(&s2, &s);
+
+    sslice_advance_rune(&s2);
+
+    if (!sslice_equals(&s2, NUMBER5)) {
+        die("Advancing a rune failed\n");
+    }
+
+    sslice_truncate_at_subslice(&s, &s2);
+
+    if (!sslice_equals(&s, "0")) {
+        die("sslice_truncate_at_subslice failed\n");
+    }
+
+    sslice_truncate_rune(&s2);
+
+    if (!sslice_equals(&s2, NUMBER6)) {
+        die("Truncating a rune failed\n");
+    }
+
+    sslice_assign(&s, NUMBERS);
+
+    sslice_advance_rune(&s);
+
+    sslice_truncate_at_whitespace(&s);
+
+    if (!sslice_equals(&s, "14")) {
+        die("Truncating at whitespace failed\n");
+    }
+
+    sslice_assign(&s, STRING);
+
+    sslice_advance_rune(&s);
+
+    sslice_truncate_at(&s, '\'');
+
+    if (!sslice_equals(&s, "This is a string")) {
+        die("Truncating at rune failed\n");
+    }
 }
 
 void test_add(void) {
@@ -135,7 +232,9 @@ void test_add(void) {
 
     value_as_string(&result, &v3);
 
-    printf("Result: %s + %s = %s\n", v1s, v2s, result);
+    if (strcmp(result, NUMBER3) != 0) {
+        die("Addition failed\n");
+    }
 }
 
 void test_lexer(void) {
@@ -155,6 +254,7 @@ void test_lexer(void) {
 
     while (true) {
         Token *token;
+        char *token_as_string;
         
         lstatus = lexer_load_next(&lexer);
 
@@ -168,9 +268,11 @@ void test_lexer(void) {
             die("Got unknown token\n");
         }
 
-        printf("Token: %s [%s]\n",
-            TokenTypes[token->type], token_to_string(token)
-        );
+        token_as_string = token_to_string(token);
+
+        printf("Token: %s [%s]\n", TokenTypes[token->type], token_as_string);
+
+        free(token_as_string);
     }
 
     if (lstatus == LEXER_END) {
@@ -196,13 +298,20 @@ void test_parser(void) {
     parser_init(&parser, &data);
 
     while (true) {
+        char *block_as_string;
         pstatus = parser_load_next(&parser);
 
         if (pstatus != PARSER_OK) {
             break;
         }
 
-        printf("Block: %s\n", BlockTypes[parser.block.type]);
+        block_as_string = block_to_string(&parser.block);
+
+        printf("Block: %s [%s]\n",
+            BlockTypes[parser.block.type], block_as_string
+        );
+
+        free(block_as_string);
     }
 
     if (pstatus != PARSER_OK) {
@@ -211,11 +320,25 @@ void test_parser(void) {
 }
 
 int main(void) {
+    printf("Testing MPD... ");
     test_mpd();
-    test_sslice();
+    puts("passed");
+
+    printf("Testing addition... ");
     test_add();
+    puts("passed");
+
+    printf("Testing SSlice... ");
+    test_sslice();
+    puts("passed");
+
+    puts("Testing lexer...");
     test_lexer();
+    puts("passed");
+
+    puts("Testing parser...");
     test_parser();
+    puts("passed");
 
     return EXIT_SUCCESS;
 }
