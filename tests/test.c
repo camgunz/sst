@@ -67,7 +67,7 @@ void test_mpd(void) {
 
     sn = mpd_to_sci(n, 0);
 
-    if (strcmp(sn, "82349023489234902342323419041892349034189341.796") != 0) {
+    if (strcmp(sn, NUMBER1) != 0) {
         die("Failed converting number to string\n");
     }
 
