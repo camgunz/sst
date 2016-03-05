@@ -182,6 +182,7 @@ void test_sslice(void) {
     }
 
     sslice_assign(&s, NUMBERS);
+    sslice_shallow_copy(&s2, &s);
 
     sslice_advance_rune(&s);
 
@@ -189,6 +190,12 @@ void test_sslice(void) {
 
     if (!sslice_equals(&s, "14")) {
         die("Truncating at whitespace failed\n");
+    }
+
+    sslice_seek_past_subslice(&s2, &s);
+
+    if (!sslice_equals(&s2, " 983 2876.55 ")) {
+        die("Seeking past subslice failed\n");
     }
 
     sslice_assign(&s, STRING);

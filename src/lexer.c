@@ -269,7 +269,7 @@ static LexerStatus lexer_handle_string(Lexer *lexer, rune r) {
         return sstatus;
     }
 
-    return sslice_advance_runes(&lexer->data, 2);
+    return sslice_advance_runes(&lexer->data, 1);
 }
 
 static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {

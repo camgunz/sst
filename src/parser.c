@@ -114,6 +114,24 @@ static ParserStatus parse_include(Parser *parser) {
 
     sslice_shallow_copy(&parser->block.as.include.path, &token->as.string);
 
+    pstatus = load_expecting_whitespace(parser, WHITESPACE_SPACE);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    pstatus = load_expecting_symbol(parser, SYMBOL_CBRACE);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    pstatus = load_expecting_symbol(parser, SYMBOL_CBRACE);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
     return PARSER_OK;
 }
 
@@ -129,20 +147,25 @@ static ParserStatus parse_iteration(Parser *parser) {
     return PARSER_OK;
 }
 
-static ParserStatus validate_raw(Parser *parser) {
-    return PARSER_OK;
-}
-
 static ParserStatus parse_math_expression(Parser *parser) {
+    /*
+     * Math expression
+     *   - Number: {{ 1 + 108 }}
+     *   - Number: {{ -1 + 108 }}
+     *   - Number: {{ person.age + 10 }}
+     *   - Number: {{ -person.age + 10 }}
+     *   - Paren: {{ (1 / 14) + ((87 + 3) / 2) }}
+     *   - Paren: {{ -(1 / 14) + ((87 + 3) / 2) }}
+     *   - Paren: {{ (person.age / 14) + ((87 + 3) / 2) }}
+     *   - Paren: {{ -(person.age / 14) + ((87 + 3) / 2) }}
+     * Include statement
+     * If statement
+     * For statement
+     */
     return PARSER_OK;
 }
 
 static ParserStatus parse_expression(Parser *parser) {
-    /* Could also be a math expression, depends on finding a math operator */
-    return PARSER_OK;
-}
-
-static ParserStatus parse_paren(Parser *parser) {
     return PARSER_OK;
 }
 
@@ -162,8 +185,6 @@ void parser_clear(Parser *parser) {
 }
 
 ParserStatus parser_load_next(Parser *parser) {
-    SSliceStatus  sstatus;
-    LexerStatus   lstatus;
     ParserStatus  pstatus;
     Token        *token = NULL;
 
@@ -238,23 +259,6 @@ ParserStatus parser_load_next(Parser *parser) {
         return pstatus;
     }
 
-    /*
-     * Math expression
-     *   - Number: {{ 1 + 108 }}
-     *   - Number: {{ -1 + 108 }}
-     *   - Number: {{ person.age + 10 }}
-     *   - Number: {{ -person.age + 10 }}
-     *   - Paren: {{ (1 / 14) + ((87 + 3) / 2) }}
-     *   - Paren: {{ -(1 / 14) + ((87 + 3) / 2) }}
-     *   - Paren: {{ (person.age / 14) + ((87 + 3) / 2) }}
-     *   - Paren: {{ -(person.age / 14) + ((87 + 3) / 2) }}
-     * Include statement
-     * If statement
-     * For statement
-     */
-
-    printf("Token type: %d\n", token->type);
-
     switch (token->type) {
         case TOKEN_KEYWORD:
             switch (token->as.keyword) {
@@ -268,7 +272,7 @@ ParserStatus parser_load_next(Parser *parser) {
                     return PARSER_UNEXPECTED_TOKEN;
             }
         default:
-            return parse_math_expression(parser);
+            return parse_expression(parser);
     }
 
     return PARSER_UNEXPECTED_TOKEN;
