@@ -16,36 +16,6 @@ typedef enum {
     PARSER_MAX
 } ParserStatus;
 
-typedef enum {
-    BLOCK_TEXT,
-    BLOCK_INCLUDE,
-    BLOCK_EXPRESSION,
-    BLOCK_CONDITIONAL,
-    BLOCK_ITERATION,
-    BLOCK_RAW,
-    BLOCK_MAX
-} BlockType;
-
-typedef SSlice Text;
-
-/*
- * {{ include "path/to/template.html" }}
- */
-typedef struct {
-    SSlice tag;
-    SSlice path;
-} IncludeStatement;
-
-typedef struct {
-    BlockType type;
-    union {
-        Text             text;
-        IncludeStatement include;
-    } as;
-} Block;
-
-extern const char *BlockTypes[BLOCK_MAX];
-
 #if 0
 
 typedef SSlice IdentifierExpression;

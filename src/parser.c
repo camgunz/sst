@@ -10,41 +10,108 @@
 #include "config.h"
 #include "rune.h"
 #include "sslice.h"
+#include "token.h"
+#include "block.h"
 #include "lexer.h"
 #include "parser.h"
 
 #define TOKEN_ALLOC_COUNT 1000
 
-const char *BlockTypes[BLOCK_MAX] = {
-    "Text",
-    "Include",
-    "Expression",
-    "Conditional",
-    "Iteration",
-    "Raw"
-};
+static ParserStatus load_next_token(Parser *parser, Token **token) {
+    LexerStatus lstatus = lexer_load_next(&parser->lexer);
 
-static ParserStatus parse_include(Parser *parser) {
-    LexerStatus  ls;
-    Token       *token;
-
-    ls = lexer_load_next(&parser->lexer);
-
-    if (ls != LEXER_OK) {
-        return ls;
+    if (lstatus != LEXER_OK) {
+        return lstatus;
     }
 
-    token = lexer_get_current_token(&parser->lexer);
+    *token = lexer_get_current_token(&parser->lexer);
 
-    if (!token) {
-        return PARSER_INTERNAL_ERROR;
+    if (!*token) {
+        return PARSER_END;
     }
 
-    if (token->type != TOKEN_STRING) {
+    return PARSER_OK;
+}
+
+static ParserStatus load_expecting_symbol(Parser *parser, Symbol sym) {
+    ParserStatus  pstatus;
+    Token        *token = NULL;
+
+    pstatus = load_next_token(parser, &token);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    if (token->type != TOKEN_SYMBOL) {
         return PARSER_UNEXPECTED_TOKEN;
     }
 
+    if (token->as.symbol != sym) {
+        return PARSER_UNEXPECTED_TOKEN;
+    }
+
+    return PARSER_OK;
+}
+
+static ParserStatus load_expecting_whitespace(Parser *parser, Whitespace ws) {
+    ParserStatus  pstatus;
+    Token        *token = NULL;
+
+    pstatus = load_next_token(parser, &token);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    if (token->type != TOKEN_WHITESPACE) {
+        return PARSER_UNEXPECTED_TOKEN;
+    }
+
+    if (token->as.whitespace != ws) {
+        return PARSER_UNEXPECTED_TOKEN;
+    }
+
+    return PARSER_OK;
+}
+
+static ParserStatus load_expecting_string(Parser *parser, Token **token) {
+    ParserStatus  pstatus;
+    Token        *next_token = NULL;
+
+    pstatus = load_next_token(parser, &next_token);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    if (next_token->type != TOKEN_STRING) {
+        return PARSER_UNEXPECTED_TOKEN;
+    }
+
+    *token = next_token;
+
+    return PARSER_OK;
+}
+
+static ParserStatus parse_include(Parser *parser) {
+    ParserStatus pstatus;
+    Token        *token = NULL;
+
+    pstatus = load_expecting_whitespace(parser, WHITESPACE_SPACE);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    pstatus = load_expecting_string(parser, &token);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
     parser->block.type = BLOCK_INCLUDE;
+
     sslice_shallow_copy(&parser->block.as.include.path, &token->as.string);
 
     return PARSER_OK;
@@ -95,14 +162,10 @@ void parser_clear(Parser *parser) {
 }
 
 ParserStatus parser_load_next(Parser *parser) {
-    LexerStatus   ls;
-    Token        *token;
-
-    ls = lexer_load_next(&parser->lexer);
-
-    if (ls != LEXER_OK) {
-        return ls;
-    }
+    SSliceStatus  sstatus;
+    LexerStatus   lstatus;
+    ParserStatus  pstatus;
+    Token        *token = NULL;
 
     /*
      * SYMBOL_OPAREN:
@@ -140,21 +203,59 @@ ParserStatus parser_load_next(Parser *parser) {
      *
      */
 
-    token = lexer_get_current_token(&parser->lexer);
+    pstatus = load_next_token(parser, &token);
 
-    if (!token) {
-        return PARSER_END;
+    if (pstatus != PARSER_OK) {
+        return pstatus;
     }
 
+    if (token->type == TOKEN_TEXT) {
+        parser->block.type = BLOCK_TEXT;
+        parser->block.as.text = token->as.text;
+
+        return PARSER_OK;
+    }
+
+    if (token->type != TOKEN_SYMBOL) {
+        return PARSER_UNEXPECTED_TOKEN;
+    }
+
+    if (token->as.symbol != SYMBOL_OBRACE) {
+        return PARSER_UNEXPECTED_TOKEN;
+    }
+
+    pstatus = load_expecting_symbol(parser, SYMBOL_OBRACE);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    pstatus = load_expecting_whitespace(parser, WHITESPACE_SPACE);
+
+    pstatus = load_next_token(parser, &token);
+
+    if (pstatus != PARSER_OK) {
+        return pstatus;
+    }
+
+    /*
+     * Math expression
+     *   - Number: {{ 1 + 108 }}
+     *   - Number: {{ -1 + 108 }}
+     *   - Number: {{ person.age + 10 }}
+     *   - Number: {{ -person.age + 10 }}
+     *   - Paren: {{ (1 / 14) + ((87 + 3) / 2) }}
+     *   - Paren: {{ -(1 / 14) + ((87 + 3) / 2) }}
+     *   - Paren: {{ (person.age / 14) + ((87 + 3) / 2) }}
+     *   - Paren: {{ -(person.age / 14) + ((87 + 3) / 2) }}
+     * Include statement
+     * If statement
+     * For statement
+     */
+
+    printf("Token type: %d\n", token->type);
+
     switch (token->type) {
-         case TOKEN_SYMBOL:
-            switch (token->as.symbol) {
-                case SYMBOL_OPAREN:
-                    return parse_paren(parser);
-                default:
-                    break;
-            }
-            break;
         case TOKEN_KEYWORD:
             switch (token->as.keyword) {
                 case KEYWORD_INCLUDE:
@@ -163,26 +264,11 @@ ParserStatus parser_load_next(Parser *parser) {
                     return parse_conditional(parser);
                 case KEYWORD_FOR:
                     return parse_iteration(parser);
-                case KEYWORD_RAW:
-                    return validate_raw(parser);
                 default:
-                    break;
-            break;
-        }
-        case TOKEN_NUMBER:
-            return parse_math_expression(parser);
-        case TOKEN_IDENTIFIER:
-            /* Could be a math expression also */
-            return parse_expression(parser);
-        case TOKEN_UNKNOWN:
-            return PARSER_UNKNOWN_TOKEN;
-        case TOKEN_STRING:
-        case TOKEN_BOOLOP:
-        case TOKEN_UNARY_BOOLOP:
-        case TOKEN_MATHOP:
-        case TOKEN_WHITESPACE:
+                    return PARSER_UNEXPECTED_TOKEN;
+            }
         default:
-            break;
+            return parse_math_expression(parser);
     }
 
     return PARSER_UNEXPECTED_TOKEN;

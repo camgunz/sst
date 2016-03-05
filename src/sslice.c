@@ -466,7 +466,7 @@ SSliceStatus sslice_truncate_at(SSlice *s, rune r) {
         }
 
         if (r2 == r) {
-            s->len = (cursor.data - s->data) - 2;
+            s->len = (cursor.data - s->data) - 1;
             return SSLICE_OK;
         }
     }
@@ -486,7 +486,7 @@ SSliceStatus sslice_truncate_at_whitespace(SSlice *s) {
         }
 
         if (rune_is_whitespace(r)) {
-            s->len = (cursor.data - s->data) - 2;
+            s->len = (cursor.data - s->data) - 1;
             return SSLICE_OK;
         }
     }

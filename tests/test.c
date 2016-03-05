@@ -11,6 +11,8 @@
 #include "rune.h"
 #include "sslice.h"
 #include "str.h"
+#include "token.h"
+#include "block.h"
 #include "lexer.h"
 #include "parser.h"
 #include "value.h"
@@ -183,6 +185,7 @@ void test_parser(void) {
     Parser parser;
     SSlice data;
     SSliceStatus sstatus;
+    ParserStatus pstatus;
 
     sstatus = sslice_assign_validate(&data, REAL_TEMPLATE);
 
@@ -193,13 +196,17 @@ void test_parser(void) {
     parser_init(&parser, &data);
 
     while (true) {
-        ParserStatus pstatus = parser_load_next(&parser);
+        pstatus = parser_load_next(&parser);
 
         if (pstatus != PARSER_OK) {
             break;
         }
 
         printf("Block: %s\n", BlockTypes[parser.block.type]);
+    }
+
+    if (pstatus != PARSER_OK) {
+        die("Bad parser status: %d\n", pstatus);
     }
 }
 
