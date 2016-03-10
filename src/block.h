@@ -14,20 +14,33 @@ typedef enum {
     BLOCK_MAX
 } BlockType;
 
-typedef SSlice Text;
+typedef SSlice TextBlock;
 
-/*
- * {{ include "path/to/template.html" }}
- */
 typedef struct {
     SSlice path;
-} IncludeStatement;
+} IncludeBlock;
+
+typedef struct {
+    Expression expression;
+} ExpressionBlock;
+
+typedef struct {
+    Expression expression;
+} ConditionalBlock;
+
+typedef struct {
+    SSlice     identifier;
+    Expression sequence;
+} IterationBlock;
 
 typedef struct {
     BlockType type;
     union {
-        Text             text;
-        IncludeStatement include;
+        TextBlock        text;
+        IncludeBlock     include;
+        ExpressionBlock  expression;
+        ConditionalBlock conditional;
+        IterationBlock   iteration;
     } as;
 } Block;
 

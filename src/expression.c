@@ -1,3 +1,80 @@
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <mpdecimal.h>
+#include <utf8proc.h>
+
+#include "config.h"
+#include "rune.h"
+#include "sslice.h"
+#include "token.h"
+#include "block.h"
+#include "lexer.h"
+#include "parser.h"
+
+/*
+ * Expression evaluation
+ *
+ * Expressions evaluate either to identifiers or values
+ *
+ * Expression: <string>
+ * Expression: <number>
+ * Expression: <identifier>
+ * Expression: <string><addop><string>
+ * Expression: <numexp><mathop><numexp>
+ * Expression: <numexp><boolop><numexp>
+ * Expression: <boolexp><orop><boolexp>
+ * Expression: <boolexp><andop><boolexp>
+ * Expression: <notop><boolexp>
+ * Expression: <keyword:range><openparen><numexp>[numexp][numexp]<closeparen>
+ * Expression: <openbracket>[exp]...<closebracket>
+ *
+ */
+
+ParserStatus parser_evaluate_expression(Parser *parser, Expression *exp) {
+    Token *token = NULL;
+    LexerStatus lstatus;
+    ParserStatus pstatus = PARSER_UNEXPECTED_TOKEN;
+    uint32_t mpdstatus;
+
+    lstatus = lexer_current_token(&parser->lexer, &token);
+
+    if (lstatus != LEXER_OK) {
+        return lstatus;
+    }
+
+    switch (token->type) {
+        case TOKEN_NUMBER:
+            exp->type = EXPRESSION_NUMERIC_CONSTANT;
+            mpdstatus = mpd_qcopy(exp->as.number, token->as.number);
+
+            if (mpdstatus != 1) {
+                pstatus = PARSER_DATA_MEMORY_EXHAUSTED_ERROR;
+            }
+            else {
+                pstatus = PARSER_OK;
+            }
+            break;
+        case TOKEN_STRING:
+            exp->type = EXPRESSION_STRING_CONSTANT;
+            sslice_shallow_copy(&exp->as.string, &token->as.string);
+            pstatus = PARSER_OK;
+            break;
+        case TOKEN_IDENTIFER:
+            exp->type = EXPRESSION_IDENTIFIER;
+            sslice_shallow_copy(&exp->as.identifier, &token-as.identifier);
+            pstatus = PARSER_OK;
+            break;
+        default:
+            break;
+    }
+
+    return pstatus;
+}
+
 /*
  * ## Literals
  *
@@ -44,7 +121,7 @@
  *   - !
  *
  * ### Boolean operator
- *   - ==, !-, >, >=, <, <=, ||, &&
+ *   - ==, !=, >, >=, <, <=, ||, &&
  *
  * ### Math expressions
  *   - First operand (numeric literal or identifier)
@@ -83,4 +160,6 @@
  *   - sequences
  *   - ranges
  */
+
+/* vi: set et ts=4 sw=4: */
 

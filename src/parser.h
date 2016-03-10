@@ -16,37 +16,12 @@ typedef enum {
     PARSER_MAX
 } ParserStatus;
 
-#if 0
-
-typedef SSlice IdentifierExpression;
-
-/*
- * {{ site.name }}
- * {{ site.name | capitalize }}
- */
-typedef struct {
-    SSlice literal;
-    SSlice filter_name; /* optional */
-} Expression;
-
-/*
- * {{ if site.name == "Super Site" }}
- * {{ if person.is_pilot }}
- * {{ elif !person.is_driver }}
- * {{ else }}
- * {{ endif }}
- */
-typedef struct {
-    SSlice literal;
-    SSlice block;
-    BoolOp operator;    /* optional */
-    SSlice expression1; /* optional */
-    SSlice expression2; /* optional */
-} ConditionalStatement;
-
 /*
  * {{ for fruit in fruits }}
- * {{ for name, age in people_to_ages }}
+ * ...
+ * {{ endfor }}
+ * {{ for person in people }}
+ *   Hello {{ person.name }}, you are {{ person.age }} years old!
  * {{ endfor }}
  */
 typedef struct {
@@ -55,17 +30,6 @@ typedef struct {
     SSlice identifiers;
     SSlice expression;
 } IterationStatement;
-
-/*
- * {{ raw }}
- * {{ endraw }}
- */
-typedef struct {
-    SSlice literal;
-    SSlice block;
-} RawStatement;
-
-#endif
 
 typedef struct {
     Lexer     lexer;
