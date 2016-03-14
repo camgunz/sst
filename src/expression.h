@@ -27,6 +27,12 @@
  *   - cbracket (only inside sequence literal)
  */
 
+typedef SSlice StringLiteral;
+
+typedef mpd_t NumericLiteral;
+
+typedef SSlice Identifier;
+
 typedef enum {
     OPERAND_STRING,
     OPERAND_NUMBER,
@@ -38,24 +44,12 @@ typedef enum {
 typedef struct {
     OperandType type;
     union {
-        StringLiteral  string_literal;
-        NumericLiteral numeric_literal;
-        Identifier     identifier;
-        SSlice         expression;
+        StringLiteral   string;
+        NumericLiteral *number;
+        Identifier      identifier;
+        SSlice          expression;
     } as;
 } Operand;
-
-typedef struct {
-    SSlice string;
-} StringLiteral;
-
-typedef struct {
-    mpd_t *number;
-} NumericLiteral;
-
-typedef struct {
-    SSlice identifier;
-} IdentifierLiteral;
 
 typedef enum {
     MATH_OPERAND_NUMBER,
@@ -67,9 +61,9 @@ typedef enum {
 typedef struct {
     MathOperandType type;
     union {
-        NumericLiteral numeric_literal;
-        Identifier     identifier;
-        SSlice         expression;
+        NumericLiteral *number;
+        Identifier      identifier;
+        SSlice          expression;
     } as;
 } MathOperand;
 
@@ -84,7 +78,7 @@ typedef struct {
     MathOperand start;
     MathOperand stop;
     MathOperand step;
-} RangeLiteral;
+} Range;
 
 typedef struct {
     Operand operand1;
@@ -126,13 +120,13 @@ typedef enum {
 typedef struct {
     ExpressionType type;
     union {
-        StringLiteral          string_literal;
-        NumericLiteral         numeric_literal;
-        IdentifierLiteral      identifier_literal;
-        RangeLiteral           range_literal;
-        MathExpression         math;
-        BooleanExpression      boolean;
-        UnaryBooleanExpression unary_boolean;
+        StringLiteral           string;
+        NumericLiteral         *number;
+        Identifier              identifier;
+        Range                   range;
+        MathExpression          math;
+        BooleanExpression       boolean;
+        UnaryBooleanExpression  unary_boolean;
     } as;
 } Expression;
 

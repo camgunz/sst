@@ -24,8 +24,18 @@ typedef struct {
     Expression expression;
 } ExpressionBlock;
 
+typedef enum {
+    BOOLEAN_EXPRESSION_UNARY,
+    BOOLEAN_EXPRESSION_BINARY,
+    BOOLEAN_EXPRESSION_MAX
+} BooleanExpressionType;
+
 typedef struct {
-    Expression expression;
+    BooleanExpressionType type;
+    union {
+        UnaryBooleanExpression unary_boolean_expression;
+        BooleanExpression      boolean_expression;
+    } as;
 } ConditionalBlock;
 
 typedef struct {

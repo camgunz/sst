@@ -9,6 +9,7 @@
 #include "sslice.h"
 #include "token.h"
 #include "utils.h"
+#include "expression.h"
 #include "block.h"
 
 const char *BlockTypes[BLOCK_MAX] = {

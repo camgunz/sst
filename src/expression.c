@@ -34,47 +34,6 @@
  *
  */
 
-ParserStatus parser_evaluate_expression(Parser *parser, Expression *exp) {
-    Token *token = NULL;
-    LexerStatus lstatus;
-    ParserStatus pstatus = PARSER_UNEXPECTED_TOKEN;
-    uint32_t mpdstatus;
-
-    lstatus = lexer_current_token(&parser->lexer, &token);
-
-    if (lstatus != LEXER_OK) {
-        return lstatus;
-    }
-
-    switch (token->type) {
-        case TOKEN_NUMBER:
-            exp->type = EXPRESSION_NUMERIC_CONSTANT;
-            mpdstatus = mpd_qcopy(exp->as.number, token->as.number);
-
-            if (mpdstatus != 1) {
-                pstatus = PARSER_DATA_MEMORY_EXHAUSTED_ERROR;
-            }
-            else {
-                pstatus = PARSER_OK;
-            }
-            break;
-        case TOKEN_STRING:
-            exp->type = EXPRESSION_STRING_CONSTANT;
-            sslice_shallow_copy(&exp->as.string, &token->as.string);
-            pstatus = PARSER_OK;
-            break;
-        case TOKEN_IDENTIFER:
-            exp->type = EXPRESSION_IDENTIFIER;
-            sslice_shallow_copy(&exp->as.identifier, &token-as.identifier);
-            pstatus = PARSER_OK;
-            break;
-        default:
-            break;
-    }
-
-    return pstatus;
-}
-
 /*
  * ## Literals
  *

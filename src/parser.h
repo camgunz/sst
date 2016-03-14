@@ -13,30 +13,13 @@ typedef enum {
     PARSER_INVALID_NUMBER_FORMAT = LEXER_INVALID_NUMBER_FORMAT,
     PARSER_INTERNAL_ERROR,
     PARSER_UNEXPECTED_TOKEN,
+    PARSER_NESTED_EXPRESSION,
     PARSER_MAX
 } ParserStatus;
 
-/*
- * {{ for fruit in fruits }}
- * ...
- * {{ endfor }}
- * {{ for person in people }}
- *   Hello {{ person.name }}, you are {{ person.age }} years old!
- * {{ endfor }}
- */
 typedef struct {
-    SSlice literal;
-    SSlice block;
-    SSlice identifiers;
-    SSlice expression;
-} IterationStatement;
-
-typedef struct {
-    Lexer     lexer;
-    size_t    parenthesis_level;
-    size_t    bracket_level;
-    size_t    brace_level;
-    Block     block;
+    Lexer lexer;
+    Block block;
 } Parser;
 
 void         parser_init(Parser *parser, SSlice *code);
