@@ -95,107 +95,86 @@ static ParserStatus load_expecting_string(Parser *parser, Token **token) {
     return PARSER_OK;
 }
 
-static ParserStatus parse_expression(Parser *parser) {
-    Token *token = NULL;
-    ParserStatus pstatus = PARSER_UNEXPECTED_TOKEN;
-    int mpdstatus;
-    uint32_t res = 0;
-    Expression *exp;
+/*
+ * Math expression
+ *   - Number: {{ 1 + 108 }}
+ *   - Number: {{ -1 + 108 }}
+ *   - Number: {{ person.age + 10 }}
+ *   - Number: {{ -person.age + 10 }}
+ *   - Paren: {{ (1 / 14) + ((87 + 3) / 2) }}
+ *   - Paren: {{ -(1 / 14) + ((87 + 3) / 2) }}
+ *   - Paren: {{ (person.age / 14) + ((87 + 3) / 2) }}
+ *   - Paren: {{ -(person.age / 14) + ((87 + 3) / 2) }}
+ * Include statement
+ * If statement
+ * For statement
+ */
+
+static ParserStatus parse_expression(Parser *parser, unsigned int level) {
+    LexerStatus  lstatus;
+    unsigned int max_level = level + 1;
+    unsigned int current_level = level;
+
+    while (true) {
+        Token *token;
+
+        lstatus = lexer_load_next(&parser->lexer);
+
+        if (lstatus != LEXER_OK) {
+            return lstatus;
+        }
+
+        token = lexer_get_current_token(&parser->lexer);
+
+        if (!token) {
+            return PARSER_END;
+        }
+
+        if (token->type == TOKEN_WHITESPACE) {
+            continue;
+        }
+
+        if ((token->type == TOKEN_SYMBOL) &&
+            (token->as.symbol == SYMBOL_CBRACE)) {
+            Token *previous_token = lexer_get_previous_token(&parser->lexer);
+
+            if (!previous_token) {
+                return PARSER_UNEXPECTED_TOKEN;
+            }
+
+            if ((previous_token->type == TOKEN_SYMBOL) &&
+                (token->as.symbol == SYMBOL_CBRACE)) {
+                /* The code block has closed */
+            }
+        }
+
+    }
+
+    printf("Current level: %u\n", current_level);
+    printf("Max level: %u\n",     max_level);
 
     /*
-     * The idea is to create a list of things to do, so:
-     *   {{ -(person.height / (14 * (2 + 8))) * (32 - 16) + ((87 + 3) / 2) }}
+     * typedef struct {
+     *     Token *operator;
+     *     Token *lhs_start;
+     *     Token *rhs_end;
+     * } ExpressionBranch;
      *
-     * -(170 / 140) * (16) + 45
-     * neg
-     * oparen
-     *   person.height
-     *   div
-     *   oparen
-     *     14
-     *     mul
-     *     oparen
-     *       2
-     *       add
-     *       8
-     *     cparen
-     *   cparen
-     * cparen
-     * mul
-     * oparen
-     *   32
-     *   sub
-     *   16
-     * cparen
-     * add
-     * oparen
-     *   oparen
-     *     87
-     *     add
-     *     3
-     *   cparen
-     *   div
-     *   2
-     * cparen
-     *
-     * becomes:
-     *
-     * add
-     *   mul
-     *     neg
-     *       div
-     *         person.height
-     *         mul
-     *           14
-     *           add
-     *             2
-     *             8
-     *     sub
-     *       32
-     *       16
-     *   div
-     *     add
-     *       87
-     *       3
-     *     2
-     *
-     * The algorithm for this being:
-     *   - find top parenthesis level
-     *   - if there are no operators:
-     *     - if there is one token:
-     *       - if token is an identifier:
-     *         - yield it as an identifier
-     *       - if token is a number:
-     *         - yield it as a number
-     *     - yield EXPRESSION_ERROR
-     *   - if there's one operator:
-     *     - yield it
-     *   - if there's more than one operator:
-     *     - yield the highest precedence operator
-     *       - the lhs is all tokens before
-     *       - the rhs is all tokens after
-     *
-     * This first step encodes precedence by creating a tree.  The next step is
-     * to travel down to the tree's leaves and evaluate them, traveling up
-     * until the final node, the evaluation of which will be the value of the
-     * expression.
+     * typedef struct {
+     *     ExpressionNodeType type;
+     *     union {
+     *         StringLiteral     string;
+     *         NumericLiteral   *number;
+     *         Identifier        identifier;
+     *         Range             range;
+     *         Sequence          sequence;
+     *         Operator          op;
+     *     } as;
+     * } ExpressionNode;
      *
      */
 
-    /*
-     * Always eat whitespace.
-     * Iterator variable ends with the "in" keyword or " }}"
-     * Boolean expressions end either with a boolean operator or " }}"
-     * Math expressions end either with a math operator or " }}"
-     * Range expressions end with a ")" (the first unbalanced ")", that is,
-     *   because range expressions are "range((person.aliases + 1) / 18)"
-     * Sequence expressions end with a "]"
-     */
-
-    switch (parser->block.type) {
-        case BLOCK_EXPRESSION:
-            exp = 
-
+#if 0
     token = lexer_get_current_token(&parser->lexer);
 
     if (!token) {
@@ -229,6 +208,9 @@ static ParserStatus parse_expression(Parser *parser) {
     }
 
     return pstatus;
+#endif
+
+    return PARSER_OK;
 }
 
 static ParserStatus parse_include(Parser *parser) {
@@ -249,7 +231,7 @@ static ParserStatus parse_include(Parser *parser) {
 
     parser->block.type = BLOCK_INCLUDE;
 
-    sslice_shallow_copy(&parser->block.as.include.path, &token->as.string);
+    sslice_shallow_copy(&parser->block.as.include_path, &token->as.string);
 
     pstatus = load_expecting_whitespace(parser, WHITESPACE_SPACE);
 
@@ -279,6 +261,8 @@ static ParserStatus parse_include(Parser *parser) {
  * {{ expression, boolop, expression }}
  */
 static ParserStatus parse_conditional(Parser *parser) {
+    unsigned int expression_depth_level = 0;
+
     ParserStatus  pstatus;
 
     pstatus = load_expecting_whitespace(parser, WHITESPACE_SPACE);
@@ -288,7 +272,8 @@ static ParserStatus parse_conditional(Parser *parser) {
     }
 
     do {
-        pstatus = evaluate_expression(parser);
+        pstatus = parse_expression(parser, expression_depth_level);
+        expression_depth_level++;
     } while (pstatus == PARSER_NESTED_EXPRESSION);
 
     if (pstatus != PARSER_OK) {
@@ -299,50 +284,18 @@ static ParserStatus parse_conditional(Parser *parser) {
 }
 
 static ParserStatus parse_iteration(Parser *parser) {
+    unsigned int expression_depth_level = 0;
     ParserStatus pstatus;
 
-    pstatus = load_expecting_whitespace(parser);
+    pstatus = load_expecting_whitespace(parser, WHITESPACE_SPACE);
 
     if (pstatus != PARSER_OK) {
         return pstatus;
     }
 
     do {
-        pstatus = evaluate_expression(parser);
-    } while (pstatus == PARSER_NESTED_EXPRESSION);
-
-    if (pstatus != PARSER_OK) {
-        return pstatus;
-    }
-
-    return PARSER_OK;
-}
-
-/*
- * Math expression
- *   - Number: {{ 1 + 108 }}
- *   - Number: {{ -1 + 108 }}
- *   - Number: {{ person.age + 10 }}
- *   - Number: {{ -person.age + 10 }}
- *   - Paren: {{ (1 / 14) + ((87 + 3) / 2) }}
- *   - Paren: {{ -(1 / 14) + ((87 + 3) / 2) }}
- *   - Paren: {{ (person.age / 14) + ((87 + 3) / 2) }}
- *   - Paren: {{ -(person.age / 14) + ((87 + 3) / 2) }}
- * Include statement
- * If statement
- * For statement
- */
-static ParserStatus parse_math_expression(Parser *parser) {
-    ParserStatus pstatus;
-
-    pstatus = load_expecting_whitespace(parser);
-
-    if (pstatus != PARSER_OK) {
-        return pstatus;
-    }
-
-    do {
-        pstatus = evaluate_expression(parser);
+        pstatus = parse_expression(parser, expression_depth_level);
+        expression_depth_level++;
     } while (pstatus == PARSER_NESTED_EXPRESSION);
 
     if (pstatus != PARSER_OK) {
@@ -353,21 +306,16 @@ static ParserStatus parse_math_expression(Parser *parser) {
 }
 
 void parser_init(Parser *parser, SSlice *data) {
-    parser->parenthesis_level = 0;
-    parser->bracket_level = 0;
-    parser->brace_level = 0;
     lexer_init(&parser->lexer);
     lexer_set_data(&parser->lexer, data);
 }
 
 void parser_clear(Parser *parser) {
-    parser->parenthesis_level = 0;
-    parser->bracket_level = 0;
-    parser->brace_level = 0;
     lexer_clear(&parser->lexer);
 }
 
 ParserStatus parser_load_next(Parser *parser) {
+    int           expression_depth_level = 0;
     ParserStatus  pstatus;
     Token        *token = NULL;
 
@@ -458,7 +406,11 @@ ParserStatus parser_load_next(Parser *parser) {
                     return PARSER_UNEXPECTED_TOKEN;
             }
         default:
-            return parse_expression(parser);
+            do {
+                pstatus = parse_expression(parser, expression_depth_level);
+                expression_depth_level++;
+            } while (pstatus == PARSER_NESTED_EXPRESSION);
+            break;
     }
 
     return PARSER_UNEXPECTED_TOKEN;

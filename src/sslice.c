@@ -401,7 +401,7 @@ void sslice_print_runes(SSlice *s) {
 
     while (true) {
         SSliceStatus sstatus;
-        rune r;
+        rune r = 0;
 
         sstatus = sslice_pop_rune(s, &r);
 

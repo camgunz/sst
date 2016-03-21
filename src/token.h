@@ -102,7 +102,8 @@ typedef enum {
 } TokenType;
 
 typedef struct {
-    TokenType type;
+    TokenType  type;
+    char      *location;
     union {
         SSlice       text;
         rune         literal;

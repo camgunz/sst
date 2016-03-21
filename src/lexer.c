@@ -172,6 +172,7 @@ static LexerStatus lexer_handle_number(Lexer *lexer) {
 
     token = token_queue_push_new(&lexer->tokens);
     token->type = TOKEN_NUMBER;
+    token->location = lexer->data.data;
     token->as.number = mpd_new(&lexer->mpd_ctx);
 
     if (!token->as.number) {
@@ -215,6 +216,7 @@ static LexerStatus lexer_handle_keyword_or_identifier(Lexer *lexer) {
             token = token_queue_push_new(&lexer->tokens);
 
             token->type = TOKEN_KEYWORD;
+            token->location = lexer->data.data;
             token->as.keyword = kw;
 
             return sslice_advance_runes(&lexer->data, start.len);
@@ -223,6 +225,7 @@ static LexerStatus lexer_handle_keyword_or_identifier(Lexer *lexer) {
 
     token = token_queue_push_new(&lexer->tokens);
     token->type = TOKEN_IDENTIFIER;
+    token->location = start.data;
     sslice_shallow_copy(&token->as.identifier, &start);
 
     return sslice_seek_past_subslice(&lexer->data, &start);
@@ -261,6 +264,7 @@ static LexerStatus lexer_handle_string(Lexer *lexer, rune r) {
 
     token = token_queue_push_new(&lexer->tokens);
     token->type = TOKEN_STRING;
+    token->location = lexer->data.data;
     sslice_shallow_copy(&token->as.string, &start);
 
     sstatus = sslice_seek_past_subslice(&lexer->data, &start);
@@ -274,6 +278,9 @@ static LexerStatus lexer_handle_string(Lexer *lexer, rune r) {
 
 static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
     SSliceStatus sstatus;
+    SSlice start;
+
+    sslice_shallow_copy(&start, &lexer->data);
 
     switch (r) {
         case '=':
@@ -287,12 +294,14 @@ static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_BOOLOP;
+                token->location = start.data;
                 token->as.bool_op = BOOLOP_EQUAL;
             }
             else {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_UNKNOWN;
+                token->location = start.data;
                 token->as.literal = r;
             }
             *handled = true;
@@ -308,12 +317,14 @@ static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_BOOLOP;
+                token->location = start.data;
                 token->as.bool_op = BOOLOP_LESS_THAN_OR_EQUAL;
             }
             else {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_UNARY_BOOLOP;
+                token->location = start.data;
                 token->as.unary_bool_op = BOOLOP_LESS_THAN;
             }
             *handled = true;
@@ -329,6 +340,7 @@ static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_BOOLOP;
+                token->location = start.data;
                 token->as.bool_op = BOOLOP_GREATER_THAN_OR_EQUAL;
             }
             else {
@@ -350,12 +362,14 @@ static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_BOOLOP;
+                token->location = start.data;
                 token->as.bool_op = BOOLOP_AND;
             }
             else {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_UNKNOWN;
+                token->location = start.data;
                 token->as.literal = r;
             }
             *handled = true;
@@ -371,12 +385,14 @@ static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_BOOLOP;
+                token->location = start.data;
                 token->as.bool_op = BOOLOP_OR;
             }
             else {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_UNKNOWN;
+                token->location = start.data;
                 token->as.literal = r;
             }
             *handled = true;
@@ -392,12 +408,14 @@ static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_BOOLOP;
+                token->location = start.data;
                 token->as.bool_op = BOOLOP_NOT_EQUAL;
             }
             else {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_UNARY_BOOLOP;
+                token->location = start.data;
                 token->as.unary_bool_op = UBOOLOP_NOT;
             }
             *handled = true;
@@ -431,6 +449,7 @@ static LexerStatus lexer_load_next_code_token(Lexer *lexer) {
                 Token *token = token_queue_push_new(&lexer->tokens);
 
                 token->type = TOKEN_WHITESPACE;
+                token->location = lexer->data.data;
                 token->as.whitespace = ws;
 
                 found_whitespace = true;
@@ -482,6 +501,7 @@ static LexerStatus lexer_load_next_code_token(Lexer *lexer) {
             Token *token = token_queue_push_new(&lexer->tokens);
 
             token->type = TOKEN_MATHOP;
+            token->location = lexer->data.data;
             token->as.math_op = m;
 
             return sslice_advance_rune(&lexer->data);
@@ -493,6 +513,7 @@ static LexerStatus lexer_load_next_code_token(Lexer *lexer) {
             Token *token = token_queue_push_new(&lexer->tokens);
 
             token->type = TOKEN_SYMBOL;
+            token->location = lexer->data.data;
             token->as.symbol = s;
 
             if (lexer_found_code_tag_close(lexer)) {
@@ -545,6 +566,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
             Token *token = token_queue_push_new(&lexer->tokens);
 
             token->type = TOKEN_TEXT;
+            token->location = lexer->data.data;
             sslice_shallow_copy(&token->as.text, &start);
 
             sslice_seek_past_subslice(&lexer->data, &token->as.text);
@@ -559,6 +581,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
         Token *token = token_queue_push_new(&lexer->tokens);
 
         token->type = TOKEN_TEXT;
+        token->location = start.data;
         sslice_truncate_at_subslice(&start, &lexer->data);
         sslice_shallow_copy(&token->as.text, &start);
 
@@ -567,6 +590,8 @@ LexerStatus lexer_load_next(Lexer *lexer) {
 
     if (tag_is_raw(&lexer->data)) {
         Token *token;
+
+        sslice_shallow_copy(&start, &lexer->data);
         
         sstatus = seek_to_endraw(&lexer->data);
 
@@ -577,6 +602,7 @@ LexerStatus lexer_load_next(Lexer *lexer) {
         token = token_queue_push_new(&lexer->tokens);
 
         token->type = TOKEN_TEXT;
+        token->location = start.data;
 
         sslice_truncate_at_subslice(&start, &lexer->data);
 

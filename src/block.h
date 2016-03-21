@@ -14,30 +14,6 @@ typedef enum {
     BLOCK_MAX
 } BlockType;
 
-typedef SSlice TextBlock;
-
-typedef struct {
-    SSlice path;
-} IncludeBlock;
-
-typedef struct {
-    Expression expression;
-} ExpressionBlock;
-
-typedef enum {
-    BOOLEAN_EXPRESSION_UNARY,
-    BOOLEAN_EXPRESSION_BINARY,
-    BOOLEAN_EXPRESSION_MAX
-} BooleanExpressionType;
-
-typedef struct {
-    BooleanExpressionType type;
-    union {
-        UnaryBooleanExpression unary_boolean_expression;
-        BooleanExpression      boolean_expression;
-    } as;
-} ConditionalBlock;
-
 typedef struct {
     SSlice     identifier;
     Expression sequence;
@@ -46,11 +22,10 @@ typedef struct {
 typedef struct {
     BlockType type;
     union {
-        TextBlock        text;
-        IncludeBlock     include;
-        ExpressionBlock  expression;
-        ConditionalBlock conditional;
-        IterationBlock   iteration;
+        SSlice         text;
+        SSlice         include_path;
+        Expression     expression;
+        IterationBlock iteration;
     } as;
 } Block;
 

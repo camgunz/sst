@@ -107,28 +107,32 @@ typedef struct {
  */
 
 typedef enum {
-    EXPRESSION_STRING,
-    EXPRESSION_NUMERIC,
-    EXPRESSION_IDENTIFIER,
-    EXPRESSION_MATH,
-    EXPRESSION_BOOLEAN,
-    EXPRESSION_UNARY_BOOLEAN,
-    EXPRESSION_RANGE,
-    EXPRESSION_SEQUENCE
-} ExpressionType;
+    EXPRESSION_NODE_STRING,
+    EXPRESSION_NODE_NUMERIC,
+    EXPRESSION_NODE_IDENTIFIER,
+    EXPRESSION_NODE_RANGE,
+    EXPRESSION_NODE_BRANCH,
+    EXPRESSION_NODE_MAX
+} ExpressionNodeType;
 
 typedef struct {
-    ExpressionType type;
+    Token *op;
+    Token *lhs_start;
+    Token *rhs_end;
+} ExpressionBranch;
+
+typedef struct {
+    ExpressionNodeType type;
     union {
-        StringLiteral           string;
-        NumericLiteral         *number;
-        Identifier              identifier;
-        Range                   range;
-        MathExpression          math;
-        BooleanExpression       boolean;
-        UnaryBooleanExpression  unary_boolean;
+        StringLiteral     string;
+        NumericLiteral   *number;
+        Identifier        identifier;
+        Range             range;
+        ExpressionBranch  branch;
     } as;
-} Expression;
+} ExpressionNode;
+
+typedef ExpressionNode Expression;
 
 #endif
 

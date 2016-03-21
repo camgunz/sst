@@ -12,6 +12,7 @@
 #include "sslice.h"
 #include "str.h"
 #include "token.h"
+#include "expression.h"
 #include "block.h"
 #include "lexer.h"
 #include "parser.h"
@@ -210,8 +211,8 @@ void test_sslice(void) {
 }
 
 void test_add(void) {
-    String s1;
-    String s2;
+    SSlice s1;
+    SSlice s2;
     Value v1;
     Value v2;
     Value v3;
@@ -222,15 +223,15 @@ void test_add(void) {
 
     mpd_maxcontext(&mpd_ctx);
 
-    string_init(&s1, NUMBER1);
-    string_init(&s2, NUMBER2);
+    sslice_assign_validate(&s1, NUMBER1);
+    sslice_assign_validate(&s2, NUMBER2);
 
-    value_init(&v1, &mpd_ctx);
-    value_init(&v2, &mpd_ctx);
-    value_init(&v3, &mpd_ctx);
+    value_init_number(&v1, &mpd_ctx);
+    value_init_number(&v2, &mpd_ctx);
+    value_init_number(&v3, &mpd_ctx);
 
-    value_set_number(&v1, &s1);
-    value_set_number(&v2, &s2);
+    value_set_number_from_sslice(&v1, &s1);
+    value_set_number_from_sslice(&v2, &s2);
 
     value_add(&v3, &v1, &v2);
 
@@ -242,6 +243,10 @@ void test_add(void) {
     if (strcmp(result, NUMBER3) != 0) {
         die("Addition failed\n");
     }
+
+    free(v1s);
+    free(v2s);
+    free(result);
 }
 
 void test_lexer(void) {
@@ -319,6 +324,10 @@ void test_parser(void) {
         );
 
         free(block_as_string);
+    }
+
+    if (pstatus == PARSER_END) {
+        pstatus = PARSER_OK;
     }
 
     if (pstatus != PARSER_OK) {

@@ -25,7 +25,7 @@ char* block_to_string(Block *block) {
         case BLOCK_TEXT:
             return sslice_to_c_string(&block->as.text);
         case BLOCK_INCLUDE:
-            return sslice_to_c_string(&block->as.include.path);
+            return sslice_to_c_string(&block->as.include_path);
             break;
         case BLOCK_EXPRESSION:
             return strdup("Expression - WIP");
