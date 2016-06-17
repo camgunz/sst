@@ -104,6 +104,7 @@ ENDIF()
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src)
 
 SET(LIBSST_SOURCE_FILES
+  ${CMAKE_SOURCE_DIR}/src/array.c
   ${CMAKE_SOURCE_DIR}/src/block.c
   ${CMAKE_SOURCE_DIR}/src/lexer.c
   ${CMAKE_SOURCE_DIR}/src/parser.c
