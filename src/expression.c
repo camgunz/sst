@@ -120,5 +120,41 @@
  *   - ranges
  */
 
+#define INITIAL_NODE_STACK_SIZE 64
+
+typedef struct {
+    ExpressionNode *nodes;
+    size_t size;
+    size_t cursor;
+} ExpressionNodeStack;
+
+bool expression_node_stack_init(ExpressionNodeStack *ens) {
+    ens->cursor = 0;
+    ens->size = INITIAL_NODE_STACK_SIZE;
+    ens->nodes = malloc(ens->size * sizeof(ExpressionNode));
+
+    if (!ens->nodes) {
+        free(ens);
+        return false;
+    }
+
+    return true;
+}
+
+ExpressionNodeStack* expression_node_stack_new(void) {
+    ExpressionNodeStack *ens = malloc(sizeof(ExpressionNodeStack));
+
+    if (!ens) {
+        return NULL;
+    }
+
+    if (!expression_node_stack_init(ens)) {
+        free(ens);
+        return NULL;
+    }
+
+    return ens;
+}
+
 /* vi: set et ts=4 sw=4: */
 

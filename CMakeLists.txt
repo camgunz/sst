@@ -110,6 +110,7 @@ SET(LIBSST_SOURCE_FILES
   ${CMAKE_SOURCE_DIR}/src/parser.c
   ${CMAKE_SOURCE_DIR}/src/rune.c
   ${CMAKE_SOURCE_DIR}/src/sslice.c
+  ${CMAKE_SOURCE_DIR}/src/stack.c
   ${CMAKE_SOURCE_DIR}/src/str.c
   ${CMAKE_SOURCE_DIR}/src/token.c
   ${CMAKE_SOURCE_DIR}/src/utils.c

@@ -47,7 +47,7 @@ bool array_ensure_capacity(Array *array, size_t length) {
         return true;
     }
 
-    new_elements = realloc(array->elements, array->len * array->element_size);
+    new_elements = realloc(array->elements, length * array->element_size);
 
     if (!new_elements) {
         return false;
