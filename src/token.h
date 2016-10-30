@@ -126,6 +126,7 @@ typedef struct {
 } TokenQueue;
 
 extern const rune  MathOpValues[MATHOP_MAX];
+extern const int   MathOpPrecedence[MATHOP_MAX];
 extern const rune  SymbolValues[SYMBOL_MAX];
 extern const rune  WhitespaceValues[WHITESPACE_MAX];
 extern const char *BoolOpValues[BOOLOP_MAX];

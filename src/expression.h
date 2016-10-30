@@ -27,45 +27,24 @@
  *   - cbracket (only inside sequence literal)
  */
 
-typedef SSlice StringLiteral;
-
-typedef mpd_t NumericLiteral;
-
-typedef SSlice Identifier;
-
 typedef enum {
     OPERAND_STRING,
     OPERAND_NUMBER,
     OPERAND_IDENTIFIER,
     OPERAND_EXPRESSION,
+    OPERAND_NOT_EVALUATED,
     OPERAND_MAX
 } OperandType;
 
 typedef struct {
     OperandType type;
     union {
-        StringLiteral   string;
-        NumericLiteral *number;
-        Identifier      identifier;
-        SSlice          expression;
+        SSlice  string;
+        mpd_t  *number;
+        SSlice  identifier;
+        SSlice  expression;
     } as;
 } Operand;
-
-typedef enum {
-    MATH_OPERAND_NUMBER,
-    MATH_OPERAND_IDENTIFIER,
-    MATH_OPERAND_EXPRESSION,
-    MATH_OPERAND_MAX
-} MathOperandType;
-
-typedef struct {
-    MathOperandType type;
-    union {
-        NumericLiteral *number;
-        Identifier      identifier;
-        SSlice          expression;
-    } as;
-} MathOperand;
 
 typedef enum {
     RANGE_FLAG_BLANK,
@@ -80,22 +59,17 @@ typedef struct {
     MathOperand step;
 } Range;
 
-typedef struct {
-    Operand operand1;
-    Operand operand2;
-    MathOp  op;
-} MathExpression;
+typedef enum {
+    EXPRESSION_VALUE,
+    EXPRESSION_CONDITIONAL,
+    EXPRESSION_RANGE
 
 typedef struct {
-    Operand operand1;
-    Operand operand2;
-    BoolOp  op;
-} BooleanExpression;
-
-typedef struct {
-    Operand     operand;
-    UnaryBoolOp op;
-} UnaryBooleanExpression;
+    ExpressionType type;
+    Operand        operand1;
+    Operand        operand2;
+    MathOp         op;
+} Expression;
 
 /*
  * Sequence expressions boil down to:
@@ -105,34 +79,6 @@ typedef struct {
  *
  * ...so there's no need to define a struct for them.
  */
-
-typedef enum {
-    EXPRESSION_NODE_STRING,
-    EXPRESSION_NODE_NUMERIC,
-    EXPRESSION_NODE_IDENTIFIER,
-    EXPRESSION_NODE_RANGE,
-    EXPRESSION_NODE_BRANCH,
-    EXPRESSION_NODE_MAX
-} ExpressionNodeType;
-
-typedef struct {
-    Token *op;
-    Token *lhs_start;
-    Token *rhs_end;
-} ExpressionBranch;
-
-typedef struct {
-    ExpressionNodeType type;
-    union {
-        StringLiteral     string;
-        NumericLiteral   *number;
-        Identifier        identifier;
-        Range             range;
-        ExpressionBranch  branch;
-    } as;
-} ExpressionNode;
-
-typedef ExpressionNode Expression;
 
 #endif
 

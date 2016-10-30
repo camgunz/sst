@@ -18,6 +18,10 @@ const rune MathOpValues[MATHOP_MAX] = {
     '+', '-', '*', '/', '%', '^',
 };
 
+const int MathOpPrecedence[MATHOP_MAX] = {
+    '0', '0', '1', '1', '1', '2',
+};
+
 const rune SymbolValues[SYMBOL_MAX] = {
     '(', ')', '[', ']', '{', '}', ',', '.', '\'', '`', '"', '|'
 };

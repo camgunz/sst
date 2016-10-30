@@ -394,6 +394,32 @@ SSliceStatus sslice_seek_past_subslice(SSlice *s, SSlice *subslice) {
     return SSLICE_OK;
 }
 
+SSliceStatus sslice_seek_past_whitespace(SSlice *s) {
+    SSlice cursor;
+    rune r;
+    SSliceStatus res;
+
+    sslice_shallow_copy(&cursor, s);
+
+    while (true) {
+        res = sslice_pop_rune(&cursor, &r);
+
+        if (res == SSLICE_END) {
+            sslice_clear(s);
+            return SSLICE_OK;
+        }
+
+        if (res != SSLICE_OK) {
+            return res;
+        }
+
+        if (!rune_is_whitespace(r)) {
+            sslice_shallow_copy(s, &cursor);
+            return;
+        }
+    }
+}
+
 void sslice_print_runes(SSlice *s) {
     SSlice copy;
 
@@ -478,6 +504,37 @@ SSliceStatus sslice_truncate_at(SSlice *s, rune r) {
             s->len = previous.data - s->data;
             return SSLICE_OK;
         }
+    }
+}
+
+SSliceStatus sslice_truncate_whitespace(SSlice *s) {
+    SSlice cursor;
+    SSlice trailing_whitespace;
+    bool ends_in_whitespace = false;
+
+    sslice_shallow_copy(&cursor, s);
+
+    while (true) {
+        rune r;
+        SSliceStatus res;
+
+        res = sslice_pop_rune(&cursor, &r);
+
+        if (res != SSLICE_OK) {
+            return res;
+        }
+
+        if (rune_is_whitespace(r)) {
+            sslice_shallow_copy(&trailing_whitespace, &cursor);
+            ends_in_whitespace = true;
+        }
+        else {
+            ends_in_whitespace = false;
+        }
+    }
+
+    if (ends_in_whitespace) {
+        s->len -= trailing_whitespace.len;
     }
 }
 

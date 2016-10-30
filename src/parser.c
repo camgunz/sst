@@ -16,8 +16,6 @@
 #include "lexer.h"
 #include "parser.h"
 
-#define TOKEN_ALLOC_COUNT 1000
-
 static ParserStatus load_next_token(Parser *parser, Token **token) {
     LexerStatus lstatus = lexer_load_next(&parser->lexer);
 
@@ -110,12 +108,66 @@ static ParserStatus load_expecting_string(Parser *parser, Token **token) {
  * For statement
  */
 
+static Expression* get_expression(Parser *parser) {
+    Expression *exp = malloc(sizeof(Expression));
+
+    if (!exp) {
+        die("Allocating an expression failed\n");
+    }
+
+    return exp;
+}
+
+static bool expression_is_unary(Expression *exp) {
+    if (exp->op == UBOOLOP_NOT) {
+        return true;
+    }
+
+    return false;
+}
+
+static bool build_expression_node(Expression *exp) {
+}
+
 static ParserStatus parse_expression(Parser *parser, unsigned int level) {
     LexerStatus  lstatus;
     unsigned int max_level = level + 1;
     unsigned int current_level = level;
+    Expression *exp = get_expression();
+
+    /*
+     * Expressions build trees, so parsing an expression means building a tree
+     * of expressions to evaluate.  If there are no identifiers, we can perform
+     * constant folding in this step.  Otherwise, that part of the expression
+     * tree freezes, and we move to different branches.
+     */
+
+    /*
+     * The algorithm here is:
+     *   - Find the lowest-precedecence operator.
+     *   - Return that operator and the lhs and rhs of the expression
+     *     - number, string, identifier, sslice
+     *   - Calling function checks if lhs or rhs is an sslice
+     *     - If so, call the evaluator with the current expression again
+     *     - This function allocates a new expression instance and creates the
+     *       tree in that fashion.
+     */
 
     while (true) {
+        build_expression_node(parser, exp);
+
+        if (expression_is_unary(exp)) {
+            if (exp->operand1.type != OPERAND_NOT_EVALUATED) {
+                break;
+            }
+        }
+        else {
+            if ((exp->operand1.type != OPERAND_NOT_EVALUATED) &&
+                (exp->operand2.type != OPERAND_NOT_EVALUATED)) {
+                break;
+            }
+        }
+
         Token *token;
 
         lstatus = lexer_load_next(&parser->lexer);

@@ -35,9 +35,11 @@ bool         sslice_pop_rune_if_identifier(SSlice *s, rune *r);
 SSliceStatus sslice_seek_to(SSlice *s, rune r);
 SSliceStatus sslice_seek_to_string(SSlice *s, const char *cs);
 SSliceStatus sslice_seek_past_subslice(SSlice *s, SSlice *subslice);
+SSliceStatus sslice_seek_past_whitespace(SSlice *s);
 SSliceStatus sslice_truncate_rune(SSlice *s);
 SSliceStatus sslice_truncate_runes(SSlice *s, size_t rune_count);
 SSliceStatus sslice_truncate_at(SSlice *s, rune r);
+SSliceStatus sslice_truncate_whitespace(SSlice *s) {
 SSliceStatus sslice_truncate_at_whitespace(SSlice *s);
 SSliceStatus sslice_truncate_at_subslice(SSlice *s, SSlice *subslice);
 void         sslice_shallow_copy(SSlice *dst, SSlice *src);
