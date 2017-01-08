@@ -80,6 +80,24 @@ typedef struct {
  * ...so there's no need to define a struct for them.
  */
 
+typedef enum {
+    EXPRESSION_NODE_STRING,
+    EXPRESSION_NODE_NUMERIC,
+    EXPRESSION_NODE_IDENTIFIER,
+    EXPRESSION_NODE_RANGE,
+    EXPRESSION_NODE_MAX
+} ExpressionNodeType;
+
+typedef struct {
+    ExpressionNodeType type;
+    union {
+        StringLiteral     string;
+        NumericLiteral   *number;
+        Identifier        identifier;
+        Range             range;
+    } as;
+} ExpressionNode;
+
 #endif
 
 /* vi: set et ts=4 sw=4: */
