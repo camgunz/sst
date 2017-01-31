@@ -2,13 +2,8 @@
 #define BLOCK_H__
 
 typedef enum {
-    BLOCK_OK = SST_OK,
-} BlockStatus;
-
-typedef enum {
     BLOCK_TEXT,
     BLOCK_INCLUDE,
-    BLOCK_EXPRESSION,
     BLOCK_CONDITIONAL,
     BLOCK_ITERATION,
     BLOCK_MAX
@@ -23,8 +18,8 @@ typedef struct {
     BlockType type;
     union {
         SSlice         text;
-        SSlice         include_path;
-        Expression     expression;
+        SSlice         include;
+        Expression     conditional;
         IterationBlock iteration;
     } as;
 } Block;

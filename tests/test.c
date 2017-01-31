@@ -1,23 +1,15 @@
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <setjmp.h>
 
-#include <mpdecimal.h>
-#include <utf8proc.h>
+#include <cbase.h>
+
+#include <cmocka.h>
 
 #include "config.h"
-#include "rune.h"
-#include "sslice.h"
-#include "str.h"
-#include "token.h"
-#include "expression.h"
-#include "block.h"
+#include "lang.h"
+#include "tokenizer.h"
 #include "lexer.h"
-#include "parser.h"
 #include "value.h"
-#include "utils.h"
 
 #define NUMBER1 "82349023489234902342323419041892349034189341.796"
 #define NUMBER2 "13982309378334023462303455668934502028340345.289"
@@ -47,317 +39,160 @@
 "{{ include '/srv/http/templates/footer.txt' }}\n"                         \
 "Last little bit down here\n"
 
-#define NUMBERS " 14 983 2876.55 "
-#define STRING  "'This is a string'"
+void die(const char *format, ...) {
+    va_list args;
 
-void test_mpd(void) {
-    mpd_context_t ctx;
-    mpd_t *n;
-    char *sn = NULL;
-    uint32_t res = 0;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
 
-    mpd_maxcontext(&ctx);
-
-    n = mpd_qnew();
-
-    if (!n) {
-        die("Allocating new number failed\n");
-    }
-
-    mpd_qset_string(n, NUMBER1, &ctx, &res);
-
-    sn = mpd_to_sci(n, 0);
-
-    if (strcmp(sn, NUMBER1) != 0) {
-        die("Failed converting number to string\n");
-    }
-
-    free(sn);
-    mpd_del(n);
+    exit(EXIT_FAILURE);
 }
 
-void test_sslice(void) {
-    SSlice s;
-    SSlice s2;
-    char *cs = strdup(NUMBER1);
-    rune r;
-
-    sslice_assign(&s, cs);
-
-    if (!sslice_equals(&s, cs)) {
-        die("sslice_equals failed\n");
-    }
-
-    if (!sslice_starts_with(&s, "8234")) {
-        die("sslice_starts_with failed\n");
-    }
-
-    if (s.len != 48) {
-        die("sslice length != 48 (%zu)\n", s.len);
-    }
-
-    sslice_get_first_rune(&s, &r);
-
-    if (r != '8') {
-        die("First rune was not '8'\n");
-    }
-
-    r = 0;
-
-    sslice_pop_rune(&s, &r);
-
-    if (r != '8') {
-        die("Popped rune was not '8'\n");
-    }
-
-    if (s.len != 47) {
-        die("sslice length != 47) (%zu)\n", s.len);
-    }
-
-    if (!sslice_first_rune_equals(&s, '2')) {
-        die("Next rune was not '2'\n");
-    }
-
-    sslice_pop_rune_if_equals(&s, '2');
-
-    if (sslice_first_rune_equals(&s, '2')) {
-        die("Failed to pop rune '2'\n");
-    }
-
-    if (!sslice_first_rune_equals(&s, '3')) {
-        die("Third rune was not '3'\n");
-    }
-
-    if (s.len != 46) {
-        die("sslice length != 46\n");
-    }
-
-    sslice_pop_rune_if_digit(&s, &r);
-
-    if (r != '3') {
-        die("Popped rune was not 3\n");
-    }
-
-    if (s.len != 45) {
-        die("sslice length != 45\n");
-    }
-
-    sslice_pop_rune_if_alnum(&s, &r);
-
-    if (r != '4') {
-        die("Popped rune was not 4\n");
-    }
-
-    if (s.len != 44) {
-        die("sslice length != 44\n");
-    }
-
-    sslice_seek_to(&s, '0');
-
-    if (!sslice_first_rune_equals(&s, '0')) {
-        die("Failed to seek to '0'\n");
-    }
-
-    if (!sslice_equals(&s, NUMBER4)) {
-        die("2nd sslice_equals failed\n");
-    }
-
-    sslice_shallow_copy(&s2, &s);
-
-    sslice_advance_rune(&s2);
-
-    if (!sslice_equals(&s2, NUMBER5)) {
-        die("Advancing a rune failed\n");
-    }
-
-    sslice_truncate_at_subslice(&s, &s2);
-
-    if (!sslice_equals(&s, "0")) {
-        die("sslice_truncate_at_subslice failed\n");
-    }
-
-    sslice_truncate_rune(&s2);
-
-    if (!sslice_equals(&s2, NUMBER6)) {
-        die("Truncating a rune failed\n");
-    }
-
-    sslice_assign(&s, NUMBERS);
-    sslice_shallow_copy(&s2, &s);
-
-    sslice_advance_rune(&s);
-
-    sslice_truncate_at_whitespace(&s);
-
-    if (!sslice_equals(&s, "14")) {
-        die("Truncating at whitespace failed\n");
-    }
-
-    sslice_seek_past_subslice(&s2, &s);
-
-    if (!sslice_equals(&s2, " 983 2876.55 ")) {
-        die("Seeking past subslice failed\n");
-    }
-
-    sslice_assign(&s, STRING);
-
-    sslice_advance_rune(&s);
-
-    sslice_truncate_at(&s, '\'');
-
-    if (!sslice_equals(&s, "This is a string")) {
-        die("Truncating at rune failed\n");
-    }
-}
-
-void test_add(void) {
-    SSlice s1;
-    SSlice s2;
+static void test_add(void **state) {
+    String s1;
+    String s2;
+    SSlice ss1;
+    SSlice ss2;
     Value v1;
     Value v2;
     Value v3;
-    char *v1s;
-    char *v2s;
     char *result;
-    mpd_context_t mpd_ctx;
+    Status status;
+    DecimalContext ctx;
 
-    mpd_maxcontext(&mpd_ctx);
+    (void)state;
 
-    sslice_assign_validate(&s1, NUMBER1);
-    sslice_assign_validate(&s2, NUMBER2);
+    status_init(&status);
 
-    value_init_number(&v1, &mpd_ctx);
-    value_init_number(&v2, &mpd_ctx);
-    value_init_number(&v3, &mpd_ctx);
+    decimal_context_init(&ctx, DECIMAL_MAX_PRECISION);
+    decimal_context_set_max(&ctx);
 
-    value_set_number_from_sslice(&v1, &s1);
-    value_set_number_from_sslice(&v2, &s2);
+    assert_true(string_init(&s1, NUMBER1, &status));
+    assert_true(string_init(&s2, NUMBER2, &status));
 
-    value_add(&v3, &v1, &v2);
+    assert_true(string_slice(&s1, 0, s1.len, &ss1, &status));
+    assert_true(string_slice(&s2, 0, s2.len, &ss2, &status));
 
-    value_as_string(&v1s, &v1);
-    value_as_string(&v2s, &v2);
+    assert_true(value_init_number_from_sslice(&v1, &ss1, &ctx, &status));
+    assert_true(value_init_number_from_sslice(&v2, &ss2, &ctx, &status));
 
-    value_as_string(&result, &v3);
+    assert_true(value_add(&v3, &v1, &v2, &ctx, &status));
 
-    if (strcmp(result, NUMBER3) != 0) {
-        die("Addition failed\n");
-    }
+    assert_true(value_to_cstr(&result, &v3, &status));
 
-    free(v1s);
-    free(v2s);
+    assert_string_equal(result, NUMBER3);
+
     free(result);
+
+    assert_true(value_clear(&v1, &status));
+    assert_true(value_clear(&v2, &status));
+    assert_true(value_clear(&v3, &status));
+
+    string_free(&s1);
+    string_free(&s2);
 }
 
-void test_lexer(void) {
-    Lexer lexer;
-    SSlice data;
-    SSliceStatus sstatus;
-    LexerStatus lstatus;
+static void test_tokenizer(void **state) {
+    String s;
+    SSlice ss;
+    Tokenizer tokenizer;
+    Status status;
 
-    sstatus = sslice_assign_validate(&data, REAL_TEMPLATE);
+    (void)state;
 
-    if (sstatus != SSLICE_OK) {
-        die("Error loading template into SSlice: %d", sstatus);
-    }
+    status_init(&status);
 
-    lexer_init(&lexer);
-    lexer_set_data(&lexer, &data);
+    assert_true(string_init(&s, REAL_TEMPLATE, &status));
+    assert_true(string_slice(&s, 0, s.len, &ss, &status));
 
-    while (true) {
-        Token *token;
-        char *token_as_string;
-        
-        lstatus = lexer_load_next(&lexer);
+    tokenizer_init(&tokenizer, &ss);
 
-        if (lstatus != LEXER_OK) {
-            break;
+    while (tokenizer_load_next(&tokenizer, &status)) {
+        char *token_data = NULL;
+
+        switch (tokenizer.token.type) {
+            case TOKEN_TEXT:
+                token_data = sslice_to_cstr(&tokenizer.token.as.text);
+                printf("<TEXT: %s>\n", token_data);
+                break;
+            case TOKEN_NUMBER:
+                token_data = sslice_to_cstr(&tokenizer.token.as.number);
+                printf("<NUMBER: %s>\n", token_data);
+                break;
+            case TOKEN_STRING:
+                token_data = sslice_to_cstr(&tokenizer.token.as.string);
+                printf("<STRING: %s>\n", token_data);
+                break;
+            case TOKEN_SYMBOL:
+                printf("<SYMBOL: %s>\n",
+                    SymbolValues[tokenizer.token.as.symbol]
+                );
+                break;
+            case TOKEN_KEYWORD:
+                printf("<KEYWORD: %s>\n",
+                    KeywordValues[tokenizer.token.as.keyword]
+                );
+                break;
+            case TOKEN_IDENTIFIER:
+                token_data = sslice_to_cstr(&tokenizer.token.as.identifier);
+                printf("<IDENTIFIER: %s>\n", token_data);
+                break;
+            case TOKEN_WHITESPACE:
+                switch (tokenizer.token.as.whitespace) {
+                    case WHITESPACE_SPACE:
+                        puts("<WHITESPACE: (space)>");
+                        break;
+                    case WHITESPACE_TAB:
+                        puts("<WHITESPACE: (tab)>");
+                        break;
+                    case WHITESPACE_NEWLINE:
+                        puts("<WHITESPACE: (tab)>");
+                        break;
+                    default:
+                        die("Invalid whitespace type %d\n",
+                            tokenizer.token.as.whitespace
+                        );
+                        break;
+                }
+                token_data = sslice_to_cstr(&tokenizer.token.as.text);
+                break;
+            default:
+                die("Invalid token type %d\n", tokenizer.token.type);
+                break;
         }
 
-        token = lexer_get_current_token(&lexer);
-
-        if (token->type == TOKEN_UNKNOWN) {
-            die("Got unknown token\n");
+        if (token_data) {
+            free(token_data);
         }
-
-        token_as_string = token_to_string(token);
-
-        printf("Token: %s [%s]\n", TokenTypes[token->type], token_as_string);
-
-        free(token_as_string);
-    }
-
-    if (lstatus == LEXER_END) {
-        puts("End of lexer");
-    }
-    else {
-        die("Bad lexer status: %d\n", lstatus);
     }
 }
 
-void test_parser(void) {
-    Parser parser;
-    SSlice data;
-    SSliceStatus sstatus;
-    ParserStatus pstatus;
+static void test_lexer(void **state) {
+    (void)state;
+}
 
-    sstatus = sslice_assign_validate(&data, REAL_TEMPLATE);
-
-    if (sstatus != SSLICE_OK) {
-        die("Error loading template into SSlice: %d", sstatus);
-    }
-
-    parser_init(&parser, &data);
-
-    while (true) {
-        char *block_as_string;
-        pstatus = parser_load_next(&parser);
-
-        if (pstatus != PARSER_OK) {
-            break;
-        }
-
-        block_as_string = block_to_string(&parser.block);
-
-        printf("Block: %s [%s]\n",
-            BlockTypes[parser.block.type], block_as_string
-        );
-
-        free(block_as_string);
-    }
-
-    if (pstatus == PARSER_END) {
-        pstatus = PARSER_OK;
-    }
-
-    if (pstatus != PARSER_OK) {
-        die("Bad parser status: %d\n", pstatus);
-    }
+static void test_parser(void **state) {
+    (void)state;
 }
 
 int main(void) {
-    printf("Testing MPD... ");
-    test_mpd();
-    puts("passed");
+    int failed_test_count = 0;
 
-    printf("Testing addition... ");
-    test_add();
-    puts("passed");
+    const struct CMUnitTest tests[] = {
+        cmocka_unit_test(test_add),
+        cmocka_unit_test(test_tokenizer),
+        cmocka_unit_test(test_lexer),
+        cmocka_unit_test(test_parser),
+    };
 
-    printf("Testing SSlice... ");
-    test_sslice();
-    puts("passed");
+    failed_test_count = cmocka_run_group_tests(tests, NULL, NULL);
 
-    puts("Testing lexer...");
-    test_lexer();
-    puts("passed");
-
-    puts("Testing parser...");
-    test_parser();
-    puts("passed");
+    if (failed_test_count > 0) {
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
 }
 
 /* vi: set et ts=4 sw=4: */
-

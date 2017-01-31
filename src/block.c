@@ -1,12 +1,6 @@
-
-#include <stdbool.h>
-
-#include <mpdecimal.h>
-#include <utf8proc.h>
+#include <cbase.h>
 
 #include "config.h"
-#include "rune.h"
-#include "sslice.h"
 #include "token.h"
 #include "utils.h"
 #include "expression.h"
@@ -23,9 +17,9 @@ const char *BlockTypes[BLOCK_MAX] = {
 char* block_to_string(Block *block) {
     switch (block->type) {
         case BLOCK_TEXT:
-            return sslice_to_c_string(&block->as.text);
+            return sslice_to_cstr(&block->as.text);
         case BLOCK_INCLUDE:
-            return sslice_to_c_string(&block->as.include_path);
+            return sslice_to_cstr(&block->as.include_path);
             break;
         case BLOCK_EXPRESSION:
             return strdup("Expression - WIP");
@@ -37,9 +31,10 @@ char* block_to_string(Block *block) {
             return strdup("Iteration - WIP");
             break;
         default:
-            return strdup("Unknown");
+            break;
     }
+
+    return strdup("Unknown");
 }
 
 /* vi: set et ts=4 sw=4: */
-

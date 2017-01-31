@@ -1,663 +1,416 @@
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
-#include <mpdecimal.h>
-#include <utf8proc.h>
+#include <cbase.h>
 
 #include "config.h"
-#include "rune.h"
-#include "sslice.h"
-#include "token.h"
+#include "lang.h"
+#include "tokenizer.h"
 #include "lexer.h"
 #include "utils.h"
 
-const rune MathOpValues[MATHOP_MAX] = {
-    '+', '-', '*', '/', '%', '^',
-};
+/*
+ * [TODO] There is no need to use heap memory to ensure parens/brackets are matched
+ *        appropriately, rather, you move into the expression and fan out in
+ *        both directions.  This would also have the advantage of not needing
+ *        delimiters; instead the lexer would initialize a Function{start, end}
+ *        or Index{start, end} struct.
+ */
 
-const int MathOpPrecedence[MATHOP_MAX] = {
-    '0', '0', '1', '1', '1', '2',
-};
+#define INITIAL_STATE_ALLOC 16
 
-const rune SymbolValues[SYMBOL_MAX] = {
-    '(', ')', '[', ']', '{', '}', ',', '.', '\'', '`', '"', '|'
-};
+#define invalid_syntax(status) status_failure( \
+    status,                                    \
+    "lexer",                                   \
+    LEXER_INVALID_STATUS,                      \
+    "Invalid syntax"                           \
+)
 
-const rune WhitespaceValues[WHITESPACE_MAX] = {
-    ' ', '\t', '\r', '\n',
-};
+#define unknown_token(status) status_failure( \
+    status,                                   \
+    "lexer",                                  \
+    LEXER_UNKNOWN_TOKEN,                      \
+    "Unknown token"                           \
+)
 
-const char *BoolOpValues[BOOLOP_MAX] = {
-    "==", "!=", ">", ">=", "<", "<=", "&&", "||"
-};
+#define unexpected_whitespace(status) status_failure( \
+    status,                                           \
+    "lexer",                                          \
+    LEXER_UNEXPECTED_WHITESPACE,                      \
+    "Unexpected whitespace"                           \
+)
 
-const char *KeywordValues[KEYWORD_MAX] = {
-    "include", "if", "elif", "else", "endif", "for", "in", "endfor", "raw",
-    "endraw", "range"
-};
+#define unexpected_symbol(status) status_failure( \
+    status,                                       \
+    "lexer",                                      \
+    LEXER_UNEXPECTED_SYMBOL,                      \
+    "Unexpected symbol"                           \
+)
 
-static SSliceStatus seek_to_next_code_tag_start(SSlice *s) {
-    SSlice cursor;
-    SSliceStatus res;
+#define unexpected_token(status) status_failure( \
+    status,                                      \
+    "lexer",                                     \
+    LEXER_UNEXPECTED_TOKEN,                      \
+    "Unexpected token"                           \
+)
 
-    sslice_shallow_copy(&cursor, s);
+#define expected_number(status) status_failure( \
+    status,                                     \
+    "lexer",                                    \
+    LEXER_EXPECTED_NUMBER,                      \
+    "Expected number"                           \
+)
 
-    while (true) {
-        if (sslice_starts_with(&cursor, "{{")) {
-            break;
-        }
+#define unexpected_cbracket(status) status_failure( \
+    status,                                         \
+    "lexer",                                        \
+    LEXER_UNEXPECTED_CLOSE_BRACKET,                 \
+    "Unexpected close bracket"                      \
+)
 
-        res = sslice_advance_rune(&cursor);
+static inline
+bool lexer_push_state(Lexer *lexer, LexerState state, Status *status) {
+    LexerState *new_state = NULL;
 
-        if (res != SSLICE_OK) {
-            return res;
-        }
+    if (!array_append(&lexer->states, (void **)&new_state, status)) {
+        return false;
     }
 
-    sslice_shallow_copy(s, &cursor);
+    *new_state = state;
 
-    return SSLICE_OK;
+    return status_ok(status);
 }
 
-static bool tag_is_raw(SSlice *s) {
-    return sslice_starts_with(s, "{{ raw }}");
+static inline
+bool lexer_pop_state(Lexer *lexer, Status *status) {
+    return array_delete(&lexer->states, lexer->states.len - 1, status);
 }
 
-static SSliceStatus seek_to_endraw(SSlice *s) {
-    SSlice cursor;
-    SSliceStatus sstatus;
-
-    sslice_shallow_copy(&cursor, s);
-
-    sstatus = sslice_seek_to_string(&cursor, "{{ endraw }}");
-
-    if (sstatus != SSLICE_OK) {
-        return sstatus;
+static inline
+bool lexer_check_state(Lexer *lexer, LexerState state) {
+    if (lexer->states.len < 1) {
+        return false;
     }
 
-    sslice_shallow_copy(s, &cursor);
+    LexerState *lexer_state = array_index_fast(
+        &lexer->states, lexer->states.len - 1
+    );
 
-    return SSLICE_OK;
+    return state == *lexer_state;
 }
 
-static bool lexer_found_code_tag_close(Lexer *lexer) {
-    Token *previous_token;
-    Token *current_token;
-
-    if (token_queue_count(&lexer->tokens) < 2) {
-        return false;
-    }
-
-    previous_token = lexer_get_previous_token(lexer);
-
-    if (!previous_token) {
-        return false;
-    }
-
-    current_token = lexer_get_current_token(lexer);
-
-    if (!current_token) {
-        return false;
-    }
-
-    if (previous_token->type != TOKEN_SYMBOL) {
-        return false;
-    }
-
-    if (previous_token->as.symbol != SYMBOL_CBRACE) {
-        return false;
-    }
-
-    if (current_token->type != TOKEN_SYMBOL) {
-        return false;
-    }
-
-    if (current_token->as.symbol != SYMBOL_CBRACE) {
-        return false;
-    }
-
-    return true;
+static inline
+void lexer_handle_text_token(Lexer *lexer) {
+    lexer->code_token.type = CODE_TOKEN_TEXT;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+    sslice_copy(&lexer->code_token.as.text, &lexer->tokenizer.token.as.text);
 }
 
-static LexerStatus lexer_handle_number(Lexer *lexer) {
-    SSlice start;
-    SSliceStatus sstatus;
-    bool found_at_least_one_digit = false;
-    Token *token;
-    uint32_t res = 0;
+static inline
+void lexer_handle_number_token(Lexer *lexer) {
+    lexer->code_token.type = CODE_TOKEN_TEXT;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+    sslice_copy(&lexer->code_token.as.number, &lexer->tokenizer.token.as.number);
+}
 
-    sslice_shallow_copy(&start, &lexer->data);
+static inline
+void lexer_handle_string_token(Lexer *lexer) {
+    lexer->code_token.type = CODE_TOKEN_TEXT;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+    sslice_copy(&lexer->code_token.as.string, &lexer->tokenizer.token.as.string);
+}
 
-    while (true) {
-        rune r;
-        bool is_digit;
+static inline
+void lexer_handle_keyword_token(Lexer *lexer) {
+    lexer->code_token.type = CODE_TOKEN_TEXT;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+    lexer->code_token.as.keyword = lexer->tokenizer.token.as.keyword;
+}
 
-        sstatus = sslice_get_first_rune(&lexer->data, &r);
+static inline
+bool lexer_set_token_operator(Lexer *lexer, Operator op, Status *status) {
+    lexer->code_token.type = CODE_TOKEN_OPERATOR;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+    lexer->code_token.as.op = OP_OPAREN;
 
-        if (sstatus != SSLICE_OK) {
-            if (sstatus == SSLICE_END) {
-                break;
+    if (op == OP_OPAREN) {
+        return lexer_push_state(lexer, LEXER_STATE_PAREN, status);
+    }
+
+    if (op == OP_CPAREN) {
+        return lexer_pop_state(lexer, status);
+    }
+
+    return status_ok(status);
+}
+
+static inline
+bool lexer_set_token_unary_math_operator(Lexer *lexer, Operator op,
+                                                       Status *status) {
+    const char *previous_location = lexer->tokenizer.token.location;
+
+    if (!tokenizer_load_next(&lexer->tokenizer, status)) {
+        return false;
+    }
+
+    /*
+     * [FIXME] This needs to accept SYMBOL_OPAREN as well, but the lexer has to
+     *         look two tokens ahead instead of just one, and the tokenizer
+     *         won't currently support that.
+     */
+    if (lexer->tokenizer.token.type != TOKEN_NUMBER) {
+        return expected_number(status);
+    }
+
+    lexer->code_token.type = CODE_TOKEN_OPERATOR;
+    lexer->code_token.location = previous_location;
+    lexer->code_token.as.op = op;
+
+    lexer->already_loaded_next = true;
+
+    return status_ok(status);
+}
+
+static inline
+bool lexer_set_token_unary_boolean_operator(Lexer *lexer, Operator op,
+                                                          Status *status) {
+    const char *previous_location = lexer->tokenizer.token.location;
+
+    if (!tokenizer_load_next(&lexer->tokenizer, status)) {
+        return false;
+    }
+
+    /* 'true' and 'false' are special identifiers */
+    if (lexer->tokenizer.token.type != TOKEN_IDENTIFIER) {
+        return expected_number(status);
+    }
+
+    lexer->code_token.type = CODE_TOKEN_OPERATOR;
+    lexer->code_token.location = previous_location;
+    lexer->code_token.as.op = op;
+
+    lexer->already_loaded_next = true;
+
+    return status_ok(status);
+}
+
+static inline
+void lexer_set_token_lookup(Lexer *lexer, SSlice *lookup,
+                                          const char *location) {
+    lexer->code_token.type = CODE_TOKEN_LOOKUP;
+    lexer->code_token.location = location;
+    sslice_copy(&lexer->code_token.as.lookup, lookup);
+
+    lexer->already_loaded_next = true;
+}
+
+static inline
+bool lexer_set_token_function(Lexer *lexer, SSlice *function,
+                                            const char *location,
+                                            Status *status) {
+    lexer->code_token.type = CODE_TOKEN_FUNCTION_START;
+    lexer->code_token.location = location;
+    sslice_copy(&lexer->code_token.as.function, function);
+
+    return lexer_push_state(lexer, LEXER_STATE_FUNCTION, status);
+}
+
+static inline
+bool lexer_set_token_function_end(Lexer *lexer, Status *status) {
+    lexer->code_token.type = CODE_TOKEN_FUNCTION_END;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+
+    return lexer_pop_state(lexer, status);
+}
+
+static inline
+bool lexer_set_token_index_end(Lexer *lexer, Status *status) {
+    lexer->code_token.type = CODE_TOKEN_INDEX_END;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+
+    return lexer_pop_state(lexer, status);
+}
+
+static inline
+bool lexer_set_token_array_end(Lexer *lexer, Status *status) {
+    lexer->code_token.type = CODE_TOKEN_ARRAY_END;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+
+    return lexer_pop_state(lexer, status);
+}
+
+static inline
+bool lexer_set_token_index(Lexer *lexer, SSlice *index,
+                                         const char *location,
+                                         Status *status) {
+    lexer->code_token.type = CODE_TOKEN_INDEX_START;
+    lexer->code_token.location = location;
+    sslice_copy(&lexer->code_token.as.index, index);
+
+    return lexer_push_state(lexer, LEXER_STATE_INDEX, status);
+}
+
+static inline
+bool lexer_set_token_array(Lexer *lexer, Status *status) {
+    lexer->code_token.type = CODE_TOKEN_ARRAY_START;
+    lexer->code_token.location = lexer->tokenizer.token.location;
+
+    return lexer_push_state(lexer, LEXER_STATE_ARRAY, status);
+}
+
+static
+bool lexer_handle_symbol_token(Lexer *lexer, Status *status) {
+    switch (lexer->tokenizer.token.as.symbol) {
+        case SYMBOL_OPAREN:
+            return lexer_set_token_operator(lexer, OP_OPAREN, status);
+        case SYMBOL_CPAREN:
+            if (lexer_check_state(lexer, LEXER_STATE_FUNCTION)) {
+                return lexer_set_token_function_end(lexer, status);
             }
 
-            return sstatus;
-        }
+            return lexer_set_token_operator(lexer, OP_CPAREN, status);
+        case SYMBOL_OBRACKET:
+            return lexer_set_token_array(lexer, status);
+        case SYMBOL_CBRACKET:
+            if (lexer_check_state(lexer, LEXER_STATE_INDEX)) {
+                return lexer_set_token_index_end(lexer, status);
+            }
 
-        is_digit = rune_is_digit(r);
+            if (lexer_check_state(lexer, LEXER_STATE_ARRAY)) {
+                return lexer_set_token_array_end(lexer, status);
+            }
 
-        if (is_digit) {
-            found_at_least_one_digit = true;
-        }
-
-        if (!(is_digit || (r == ',') || (r == '.'))) {
-            break;
-        }
-
-        sslice_pop_rune(&lexer->data, NULL);
-    }
-
-    if (!found_at_least_one_digit) {
-        return LEXER_INVALID_NUMBER_FORMAT;
-    }
-
-    sstatus = sslice_truncate_at_subslice(&start, &lexer->data);
-
-    if (sstatus != SSLICE_OK) {
-        return sstatus;
-    }
-
-    char *num = sslice_to_c_string(&start);
-
-    if (!num) {
-        return LEXER_DATA_MEMORY_EXHAUSTED;
-    }
-
-    token = token_queue_push_new(&lexer->tokens);
-    token->type = TOKEN_NUMBER;
-    token->location = lexer->data.data;
-    token->as.number = mpd_new(&lexer->mpd_ctx);
-
-    if (!token->as.number) {
-        free(num);
-
-        return LEXER_DATA_MEMORY_EXHAUSTED;
-    }
-
-    mpd_qset_string(token->as.number, num, &lexer->mpd_ctx, &res);
-
-    free(num);
-
-    if (res != 0) {
-        return LEXER_INVALID_NUMBER_FORMAT;
-    }
-
-    return LEXER_OK;
-}
-
-static LexerStatus lexer_handle_keyword_or_identifier(Lexer *lexer) {
-    SSlice start;
-    Token *token;
-    SSliceStatus sstatus;
-
-    sslice_shallow_copy(&start, &lexer->data);
-
-    sstatus = sslice_truncate_at_whitespace(&start);
-
-    if (sstatus != SSLICE_OK) {
-        return sstatus;
-    }
-
-#if 0
-    if (!validate_identifier(&start)) {
-        return LEXER_INVALID_IDENTIFIER_FORMAT;
-    }
-#endif
-
-    for (Keyword kw = KEYWORD_FIRST; kw < KEYWORD_MAX; kw++) {
-        if (sslice_equals(&start, KeywordValues[kw])) {
-            token = token_queue_push_new(&lexer->tokens);
-
-            token->type = TOKEN_KEYWORD;
-            token->location = lexer->data.data;
-            token->as.keyword = kw;
-
-            return sslice_advance_runes(&lexer->data, start.len);
-        }
-    }
-
-    token = token_queue_push_new(&lexer->tokens);
-    token->type = TOKEN_IDENTIFIER;
-    token->location = start.data;
-    sslice_shallow_copy(&token->as.identifier, &start);
-
-    return sslice_seek_past_subslice(&lexer->data, &start);
-}
-
-static LexerStatus lexer_handle_string(Lexer *lexer, rune r) {
-    SSlice start;
-    Token *token;
-    SSliceStatus sstatus;
-
-    sslice_shallow_copy(&start, &lexer->data);
-
-    sstatus = sslice_advance_rune(&start);
-
-    switch (sstatus) {
-        case SSLICE_END:
-        case SSLICE_MEMORY_EXHAUSTED:
-        case SSLICE_NOT_ASSIGNED:
-        case SSLICE_INVALID_OPTS:
-            return sstatus;
+            return unexpected_cbracket(status);
+        case SYMBOL_PLUS:
+            return lexer_set_token_unary_math_operator(
+                lexer,
+                OP_MATH_POSITIVE,
+                status
+            );
+        case SYMBOL_MINUS:
+            return lexer_set_token_unary_math_operator(
+                lexer,
+                OP_MATH_NEGATIVE,
+                status
+            );
+        case SYMBOL_EXCLAMATION_POINT:
+            return lexer_set_token_unary_boolean_operator(
+                lexer,
+                OP_BOOL_NOT,
+                status
+            );
         default:
-            break;
+            return unexpected_symbol(status);
     }
 
-    sstatus = sslice_truncate_at(&start, r);
-
-    switch (sstatus) {
-        case SSLICE_END:
-        case SSLICE_MEMORY_EXHAUSTED:
-        case SSLICE_NOT_ASSIGNED:
-        case SSLICE_INVALID_OPTS:
-            return sstatus;
-        default:
-            break;
-    }
-
-    token = token_queue_push_new(&lexer->tokens);
-    token->type = TOKEN_STRING;
-    token->location = lexer->data.data;
-    sslice_shallow_copy(&token->as.string, &start);
-
-    sstatus = sslice_seek_past_subslice(&lexer->data, &start);
-
-    if (sstatus != SSLICE_OK) {
-        return sstatus;
-    }
-
-    return sslice_advance_runes(&lexer->data, 1);
+    return status_ok(status);
 }
 
-static LexerStatus lexer_handle_boolop(Lexer *lexer, rune r, bool *handled) {
-    SSliceStatus sstatus;
-    SSlice start;
+static
+bool lexer_handle_identifier_token(Lexer *lexer, Status *status) {
+    Token token;
 
-    sslice_shallow_copy(&start, &lexer->data);
+    memcpy(&token, &lexer->tokenizer.token, sizeof(Token));
 
-    switch (r) {
-        case '=':
-            sstatus = sslice_advance_rune(&lexer->data);
-
-            if (sstatus != SSLICE_OK) {
-                return sstatus;
-            }
-
-            if (sslice_pop_rune_if_equals(&lexer->data, '=')) {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_BOOLOP;
-                token->location = start.data;
-                token->as.bool_op = BOOLOP_EQUAL;
-            }
-            else {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_UNKNOWN;
-                token->location = start.data;
-                token->as.literal = r;
-            }
-            *handled = true;
-            return LEXER_OK;
-        case '<':
-            sstatus = sslice_advance_rune(&lexer->data);
-
-            if (sstatus != SSLICE_OK) {
-                return sstatus;
-            }
-
-            if (sslice_pop_rune_if_equals(&lexer->data, '=')) {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_BOOLOP;
-                token->location = start.data;
-                token->as.bool_op = BOOLOP_LESS_THAN_OR_EQUAL;
-            }
-            else {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_UNARY_BOOLOP;
-                token->location = start.data;
-                token->as.unary_bool_op = BOOLOP_LESS_THAN;
-            }
-            *handled = true;
-            return LEXER_OK;
-        case '>':
-            sstatus = sslice_advance_rune(&lexer->data);
-
-            if (sstatus != SSLICE_OK) {
-                return sstatus;
-            }
-
-            if (sslice_pop_rune_if_equals(&lexer->data, '=')) {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_BOOLOP;
-                token->location = start.data;
-                token->as.bool_op = BOOLOP_GREATER_THAN_OR_EQUAL;
-            }
-            else {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_UNARY_BOOLOP;
-                token->as.unary_bool_op = BOOLOP_GREATER_THAN;
-            }
-            *handled = true;
-            return LEXER_OK;
-        case '&':
-            sstatus = sslice_advance_rune(&lexer->data);
-
-            if (sstatus != SSLICE_OK) {
-                return sstatus;
-            }
-
-            if (sslice_pop_rune_if_equals(&lexer->data, '&')) {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_BOOLOP;
-                token->location = start.data;
-                token->as.bool_op = BOOLOP_AND;
-            }
-            else {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_UNKNOWN;
-                token->location = start.data;
-                token->as.literal = r;
-            }
-            *handled = true;
-            return LEXER_OK;
-        case '|':
-            sstatus = sslice_advance_rune(&lexer->data);
-
-            if (sstatus != SSLICE_OK) {
-                return sstatus;
-            }
-
-            if (sslice_pop_rune_if_equals(&lexer->data, '|')) {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_BOOLOP;
-                token->location = start.data;
-                token->as.bool_op = BOOLOP_OR;
-            }
-            else {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_UNKNOWN;
-                token->location = start.data;
-                token->as.literal = r;
-            }
-            *handled = true;
-            return LEXER_OK;
-        case '!':
-            sstatus = sslice_advance_rune(&lexer->data);
-
-            if (sstatus != SSLICE_OK) {
-                return sstatus;
-            }
-
-            if (sslice_pop_rune_if_equals(&lexer->data, '=')) {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_BOOLOP;
-                token->location = start.data;
-                token->as.bool_op = BOOLOP_NOT_EQUAL;
-            }
-            else {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_UNARY_BOOLOP;
-                token->location = start.data;
-                token->as.unary_bool_op = UBOOLOP_NOT;
-            }
-            *handled = true;
-            return LEXER_OK;
-        default:
-            *handled = false;
-            return false;
+    if (!tokenizer_load_next(&lexer->tokenizer, status)) {
+        return false;
     }
-}
 
-static LexerStatus lexer_load_next_code_token(Lexer *lexer) {
-    rune r;
-    LexerStatus lstatus;
-    SSliceStatus sstatus;
-
-    while (true) {
-        if (sslice_empty(&lexer->data)) {
-            return LEXER_END;
+    if (lexer->tokenizer.token.type == TOKEN_WHITESPACE) {
+        while (lexer->tokenizer.token.type == TOKEN_WHITESPACE) {
+            if (!tokenizer_load_next(&lexer->tokenizer, status)) {
+                return false;
+            }
         }
 
-        sstatus = sslice_get_first_rune(&lexer->data, &r);
-
-        if (sstatus != SSLICE_OK) {
-            return sstatus;
-        }
-
-        bool found_whitespace = false;
-
-        for (Whitespace ws = WHITESPACE_FIRST; ws < WHITESPACE_MAX; ws++) {
-            if (r == WhitespaceValues[ws]) {
-                Token *token = token_queue_push_new(&lexer->tokens);
-
-                token->type = TOKEN_WHITESPACE;
-                token->location = lexer->data.data;
-                token->as.whitespace = ws;
-
-                found_whitespace = true;
-
-                sstatus = sslice_advance_runes(&lexer->data, 1);
-
-                if (sstatus != SSLICE_OK) {
-                    return sstatus;
-                }
-
-                break;
-            }
-
-        }
-
-        if (!found_whitespace) {
-            break;
-        }
-
-        return LEXER_OK;
+        lexer_set_token_lookup(lexer, &token.as.identifier, token.location);
+        return status_ok(status);
     }
 
-    if (rune_is_digit(r) || r == '-' || r == '.') {
-        return lexer_handle_number(lexer);
+    if (lexer->tokenizer.token.as.symbol == SYMBOL_OPAREN) {
+        return lexer_set_token_function(
+            lexer,
+            &token.as.identifier,
+            token.location,
+            status
+        );
     }
 
-    if (rune_is_alpha(r) || r == '_') {
-        return lexer_handle_keyword_or_identifier(lexer);
+    if (lexer->tokenizer.token.as.symbol == SYMBOL_OBRACKET) {
+        return lexer_set_token_index(
+            lexer,
+            &token.as.identifier,
+            token.location,
+            status
+        );
     }
 
-    if (r == '\'' || r == '`' || r == '"') {
-        return lexer_handle_string(lexer, r);
-    }
-
-    bool handled = false;
-
-    lstatus = lexer_handle_boolop(lexer, r, &handled);
-
-    if (lstatus != LEXER_OK) {
-        return lstatus;
-    }
-
-    if (handled) {
-        return LEXER_OK;
-    }
-
-    for (MathOp m = MATHOP_FIRST; m < MATHOP_MAX; m++) {
-        if (r == MathOpValues[m]) {
-            Token *token = token_queue_push_new(&lexer->tokens);
-
-            token->type = TOKEN_MATHOP;
-            token->location = lexer->data.data;
-            token->as.math_op = m;
-
-            return sslice_advance_rune(&lexer->data);
-        }
-    }
-
-    for (Symbol s = SYMBOL_FIRST; s < SYMBOL_MAX; s++) {
-        if (r == SymbolValues[s]) {
-            Token *token = token_queue_push_new(&lexer->tokens);
-
-            token->type = TOKEN_SYMBOL;
-            token->location = lexer->data.data;
-            token->as.symbol = s;
-
-            if (lexer_found_code_tag_close(lexer)) {
-                lexer->in_code = false;
-            }
-
-            return sslice_advance_rune(&lexer->data);
-        }
-    }
-
-    return LEXER_UNKNOWN_TOKEN;
-}
-
-void lexer_init(Lexer *lexer) {
-    lexer_clear(lexer);
-    mpd_maxcontext(&lexer->mpd_ctx);
+    return unexpected_token(status);
 }
 
 void lexer_clear(Lexer *lexer) {
-    sslice_clear(&lexer->data);
-    sslice_clear(&lexer->tag);
-    lexer->in_code = false;
-    token_queue_clear(&lexer->tokens);
+    tokenizer_clear(&lexer->tokenizer);
+    lexer->code_token.type = CODE_TOKEN_UNKNOWN;
+    lexer->code_token.location = NULL;
+    lexer->already_loaded_next = false;
+    array_clear(&lexer->states);
 }
 
-void lexer_set_data(Lexer *lexer, SSlice *data) {
-    lexer_clear(lexer);
-
-    sslice_shallow_copy(&lexer->data, data);
+void lexer_set_data(Lexer *lexer, SSlice *sslice) {
+    tokenizer_init(&lexer->tokenizer, sslice);
+    lexer->code_token.type = CODE_TOKEN_UNKNOWN;
+    lexer->code_token.location = NULL;
+    lexer->already_loaded_next = false;
+    array_clear(&lexer->states);
 }
 
-LexerStatus lexer_load_next(Lexer *lexer) {
-    SSlice start;
-    SSliceStatus sstatus;
+bool lexer_init(Lexer *lexer, SSlice *data, Status *status) {
+    tokenizer_init(&lexer->tokenizer, data);
+    lexer->code_token.type = CODE_TOKEN_UNKNOWN;
+    lexer->code_token.location = NULL;
+    lexer->already_loaded_next = false;
 
-    if (sslice_empty(&lexer->data)) {
-        return LEXER_END;
+    if (!array_init_alloc(&lexer->states, sizeof(LexerState),
+                                          INITIAL_STATE_ALLOC,
+                                          status)) {
+        return false;
     }
 
-    sslice_shallow_copy(&start, &lexer->data);
-
-    if (lexer->in_code) {
-        return lexer_load_next_code_token(lexer);
-    }
-
-    sstatus = seek_to_next_code_tag_start(&lexer->data);
-
-    if (sstatus != SSLICE_OK) {
-        if (sstatus == SSLICE_END) {
-            Token *token = token_queue_push_new(&lexer->tokens);
-
-            token->type = TOKEN_TEXT;
-            token->location = lexer->data.data;
-            sslice_shallow_copy(&token->as.text, &start);
-
-            sslice_seek_past_subslice(&lexer->data, &token->as.text);
-
-            return LEXER_OK;
-        }
-
-        return sstatus;
-    }
-
-    if (lexer->data.data != start.data) {
-        Token *token = token_queue_push_new(&lexer->tokens);
-
-        token->type = TOKEN_TEXT;
-        token->location = start.data;
-        sslice_truncate_at_subslice(&start, &lexer->data);
-        sslice_shallow_copy(&token->as.text, &start);
-
-        return LEXER_OK;
-    }
-
-    if (tag_is_raw(&lexer->data)) {
-        Token *token;
-
-        sslice_shallow_copy(&start, &lexer->data);
-        
-        sstatus = seek_to_endraw(&lexer->data);
-
-        if (sstatus != SSLICE_OK) {
-            return sstatus;
-        }
-
-        token = token_queue_push_new(&lexer->tokens);
-
-        token->type = TOKEN_TEXT;
-        token->location = start.data;
-
-        sslice_truncate_at_subslice(&start, &lexer->data);
-
-        sslice_shallow_copy(&token->as.text, &start);
-
-        /* {{ raw }} is 9 runes */
-        sstatus = sslice_advance_runes(&token->as.text, 9);
-
-        if (sstatus != SSLICE_OK) {
-            return sstatus;
-        }
-
-        /* {{ endraw }} is 12 runes */
-        sslice_truncate_runes(&token->as.text, 12);
-
-        if (sstatus != SSLICE_OK) {
-            return sstatus;
-        }
-
-        sslice_advance_runes(&lexer->data, 12);
-
-        return LEXER_OK;
-    }
-
-    lexer->in_code = true;
-    return lexer_load_next_code_token(lexer);
+    return status_ok(status);
 }
 
-Token* lexer_get_previous_token(Lexer *lexer) {
-    TokenQueue *token_queue = &lexer->tokens;
+bool lexer_load_next(Lexer *lexer, Status *status) {
+    if (!lexer->already_loaded_next) {
+        if (!tokenizer_load_next(&lexer->tokenizer, status)) {
+            return false;
+        }
 
-    if (token_queue_count(token_queue) < 2) {
-        return NULL;
+        lexer->already_loaded_next = false;
     }
 
-    if (token_queue->tail > 0) {
-        return &token_queue->tokens[token_queue->tail - 1];
+    switch (lexer->tokenizer.token.type) {
+        case TOKEN_UNKNOWN:
+            return unknown_token(status);
+        case TOKEN_TEXT:
+            lexer_handle_text_token(lexer);
+            return status_ok(status);
+        case TOKEN_NUMBER:
+            lexer_handle_number_token(lexer);
+            return status_ok(status);
+        case TOKEN_STRING:
+            lexer_handle_string_token(lexer);
+            return status_ok(status);
+        case TOKEN_SYMBOL:
+            return lexer_handle_symbol_token(lexer, status);
+        case TOKEN_KEYWORD:
+            lexer_handle_keyword_token(lexer);
+            return status_ok(status);
+        case TOKEN_IDENTIFIER:
+            return lexer_handle_identifier_token(lexer, status);
+        case TOKEN_WHITESPACE:
+            return unexpected_whitespace(status);
+        default:
+            break;
     }
 
-    return &token_queue->tokens[TOKEN_QUEUE_SIZE - 1];
-}
-
-Token* lexer_get_current_token(Lexer *lexer) {
-    TokenQueue *token_queue = &lexer->tokens;
-
-    if (token_queue_empty(token_queue)) {
-        return NULL;
-    }
-
-    return &token_queue->tokens[token_queue->tail];
+    return unexpected_token(status);
 }
 
 /* vi: set et ts=4 sw=4: */
-

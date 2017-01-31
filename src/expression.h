@@ -1,104 +1,60 @@
 #ifndef EXPRESSION_H__
 #define EXPRESSION_H__
 
-/*
- * {{ if (player.shots_made / person.shots_taken) / 100 > .5 }}
- * Holy cow!
- * {{ endif }}
- *
- * <keyword:if>
- * <symbol:oparen>
- * <identifier:player.shots_made>
- * <mathop:divide>
- * <identifier:player.shots_taken>
- * <symbol:cparen>
- * <mathop:divide>
- * <boolop:gt>
- * <number:.5>
- */
-
-/*
- * After literal:
- *   - oparen
- *   - cparen
- *   - mathop
- *   - boolop
- *   - comma
- *   - cbracket (only inside sequence literal)
- */
-
 typedef enum {
-    OPERAND_STRING,
-    OPERAND_NUMBER,
+    OPERAND_LITERAL,
     OPERAND_IDENTIFIER,
-    OPERAND_EXPRESSION,
-    OPERAND_NOT_EVALUATED,
-    OPERAND_MAX
+    OPERAND_INDEX,
+    OPERAND_LOOKUP,
+    OPERAND_FUNCTION_CALL,
 } OperandType;
+
+typedef struct {
+    SSlice identifier;
+    size_t index;
+} ArrayIndex;
 
 typedef struct {
     OperandType type;
     union {
-        SSlice  string;
-        mpd_t  *number;
-        SSlice  identifier;
-        SSlice  expression;
+        Value literal;
+        SSlice identifier;
+        ArrayIndex array_index;
+        SSlice object_lookup;
+        FunctionCall *function_call;
     } as;
-} Operand;
+} OperandValue;
 
 typedef enum {
-    RANGE_FLAG_BLANK,
-    RANGE_FLAG_HAS_START,
-    RANGE_FLAG_HAS_STEP
-} RangeFlag;
+    EXPRESSION_LITERAL = 1,
+    EXPRESSION_UNARY,
+    EXPRESSION_BINARY,
+} ExpressionType;
 
 typedef struct {
-    RangeFlag   flags;
-    MathOperand start;
-    MathOperand stop;
-    MathOperand step;
-} Range;
+    Operand operand;
+} LiteralExpression;
 
-typedef enum {
-    EXPRESSION_VALUE,
-    EXPRESSION_CONDITIONAL,
-    EXPRESSION_RANGE
+typedef struct {
+    Operator op;
+    Operand operand;
+} UnaryExpression;
+
+typedef struct {
+    Operand operand1;
+    Operator op;
+    Operand operand2;
+} BinaryExpression;
 
 typedef struct {
     ExpressionType type;
-    Operand        operand1;
-    Operand        operand2;
-    MathOp         op;
-} Expression;
-
-/*
- * Sequence expressions boil down to:
- *   - Sequence start
- *   - 0 to N expressions
- *   - Sequence end
- *
- * ...so there's no need to define a struct for them.
- */
-
-typedef enum {
-    EXPRESSION_NODE_STRING,
-    EXPRESSION_NODE_NUMERIC,
-    EXPRESSION_NODE_IDENTIFIER,
-    EXPRESSION_NODE_RANGE,
-    EXPRESSION_NODE_MAX
-} ExpressionNodeType;
-
-typedef struct {
-    ExpressionNodeType type;
     union {
-        StringLiteral     string;
-        NumericLiteral   *number;
-        Identifier        identifier;
-        Range             range;
+        LiteralExpression *literal_expression;
+        UnaryExpression *unary_expression;
+        BinaryExpression *binary_expression;
     } as;
-} ExpressionNode;
+} Expression;
 
 #endif
 
 /* vi: set et ts=4 sw=4: */
-
