@@ -6,14 +6,6 @@
 #include "lexer.h"
 #include "utils.h"
 
-/*
- * [TODO] There is no need to use heap memory to ensure parens/brackets are matched
- *        appropriately, rather, you move into the expression and fan out in
- *        both directions.  This would also have the advantage of not needing
- *        delimiters; instead the lexer would initialize a Function{start, end}
- *        or Index{start, end} struct.
- */
-
 #define INITIAL_STATE_ALLOC 16
 
 #define invalid_syntax(status) status_failure( \

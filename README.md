@@ -32,6 +32,14 @@ other template engines:
   - Low memory usage
 - Does not use regular expressions
 
+SST's parser is thread-aware: multiple parsers may be assigned on a 1:1 basis
+to multiple threads.
+
+SST's templates are thread-safe: templates may be rendered by multiple threads
+simultaneously.
+
+SST deals strictly in UTF-8.
+
 ## A template engine in C?  Are you out of your mind?
 
 Maybe.  Here's the plan to avoid disaster:
@@ -45,8 +53,8 @@ Maybe.  Here's the plan to avoid disaster:
 5. Use sanitizers during development
 
 SST is written in what I would consider clear, readable, and safe C.  It is
-also not very big: currently the line count is ~1,700 LOC and will probably
-stay under 3,000 LOC when fully implemented.  It should be easy to understand
+also not very big: currently the line count is ~1,900 LOC and will probably
+stay under 5,000 LOC when fully implemented.  It should be easy to understand
 and thus easy to audit.
 
 ## Why not use template engine X?
