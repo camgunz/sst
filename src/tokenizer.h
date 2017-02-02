@@ -4,6 +4,7 @@
 typedef enum {
     TOKEN_UNKNOWN,
     TOKEN_TEXT,
+    TOKEN_RAW,
     TOKEN_NUMBER,
     TOKEN_STRING,
     TOKEN_SYMBOL,
@@ -17,6 +18,7 @@ typedef struct {
     const char *location;
     union {
         SSlice text;
+        SSlice raw;
         SSlice number;
         SSlice string;
         Symbol symbol;

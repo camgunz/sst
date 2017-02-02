@@ -1,6 +1,13 @@
 #ifndef VALUE_H__
 #define VALUE_H__
 
+enum {
+    VALUE_UNKNOWN_TYPE = 1,
+    VALUE_INVALID_TYPE,
+    VALUE_CONVERSION_FAILURE,
+    VALUE_INVALID_BOOLEAN_VALUE,
+};
+
 typedef enum {
     VALUE_NONE,
     VALUE_BOOLEAN,
@@ -10,14 +17,9 @@ typedef enum {
     VALUE_TABLE,
 } ValueType;
 
-enum {
-    VALUE_UNKNOWN_TYPE = 1,
-    VALUE_INVALID_TYPE,
-    VALUE_CONVERSION_FAILURE,
-};
-
 typedef struct {
     ValueType type;
+    size_t decimal_data[DECIMAL_MINALLOC_MAX];
     union {
         String string;
         Decimal number;
@@ -27,15 +29,19 @@ typedef struct {
     } as;
 } Value;
 
-bool value_init(Value *value, Status *status);
+void value_init_boolean(Value *value, bool b);
+bool value_init_number(Value *value, const char *num, DecimalContext *ctx,
+                                                      Status *status);
+bool value_init_string(Value *value, const char *string, Status *status);
+void value_init_array(Value *value);
+bool value_init_table(Value *value, Status *status);
+
 bool value_init_boolean_from_sslice(Value *value, SSlice *ss, Status *status);
 bool value_init_number_from_sslice(Value *value, SSlice *ss,
                                                  DecimalContext *ctx,
                                                  Status *status);
 bool value_init_string_from_sslice(Value *value, SSlice *ss, Status *status);
-bool value_init_array_from_sslice(Value *value, SSlice *ss, Status *status);
-bool value_clear(Value *value, Status *status);
-bool value_set_type(Value *value, ValueType type, Status *status);
+void value_clear(Value *value);
 bool value_set_boolean(Value *value, bool b, Status *status);
 bool value_set_number(Value *value, Decimal *n, Status *status);
 bool value_set_string(Value *value, String *s, Status *status);
@@ -62,7 +68,16 @@ bool value_or(Value *result, Value *op1, Value *op2, Status *status);
 bool value_not(Value *result, Value *op1, Status *status);
 bool value_equal(Value *result, Value *op1, Value *op2, Status *status);
 bool value_to_cstr(char **s, Value *value, Status *status);
-bool value_clear(Value *value, Status *status);
+void value_free(Value *value);
+
+static inline
+void value_set_type(Value *value, ValueType type) {
+    if (value->type != type) {
+        value_free(value);
+    }
+
+    value->type = type;
+}
 
 #endif
 

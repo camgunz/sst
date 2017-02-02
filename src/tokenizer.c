@@ -62,51 +62,78 @@
 
 static inline
 bool tokenizer_skip_rune(Tokenizer *tokenizer, Status *status) {
-    return sslice_skip_rune(tokenizer->data, status);
+    if (sslice_skip_rune(tokenizer->data, status)) {
+        tokenizer->column++;
+        return status_ok(status);
+    }
+
+    return false;
 }
 
 static inline
 bool tokenizer_skip_runes(Tokenizer *tokenizer, size_t len, Status *status) {
-    return sslice_skip_runes(tokenizer->data, len, status);
+    if (sslice_skip_runes(tokenizer->data, len, status)) {
+        tokenizer->column += len;
+        return status_ok(status);
+    }
+
+    return false;
 }
 
 static inline
 bool tokenizer_skip_rune_if_equals(Tokenizer *tokenizer, rune r,
                                                          Status *status) {
-    size_t len = tokenizer->data->len;
-    bool res = sslice_skip_rune_if_equals(tokenizer->data, r, status);
+    if (sslice_skip_rune_if_equals(tokenizer->data, r, status)) {
+        size_t len = tokenizer->data->len;
 
-    if (res) {
         tokenizer->column += len - tokenizer->data->len;
+
+        return status_ok(status);
     }
 
-    return res;
+    return false;
 }
 
 static inline
 bool tokenizer_seek_past_subslice(Tokenizer *tokenizer, SSlice *subslice,
                                                         Status *status) {
-    return sslice_seek_past_subslice(tokenizer->data, subslice, status);
+
+    size_t saved_len = tokenizer->data->len;
+
+    if (sslice_seek_past_subslice(tokenizer->data, subslice, status)) {
+        tokenizer->column += (saved_len - tokenizer->data->len);
+
+        return status_ok(status);
+    }
+
+    return false;
 }
 
 static inline
 void tokenizer_set_token_text(Tokenizer *tokenizer, SSlice *text) {
     tokenizer->token.type = TOKEN_TEXT;
-    tokenizer->token.location = tokenizer->data->data;
+    tokenizer->token.location = text->data;
     sslice_copy(&tokenizer->token.as.text, text);
+}
+
+static inline
+void tokenizer_set_token_raw(Tokenizer *tokenizer, SSlice *raw_text) {
+    tokenizer->token.type = TOKEN_RAW;
+    tokenizer->token.location = raw_text->data;
+    sslice_copy(&tokenizer->token.as.raw, raw_text);
 }
 
 static inline
 void tokenizer_set_token_number(Tokenizer *tokenizer, SSlice *number) {
     tokenizer->token.type = TOKEN_NUMBER;
-    tokenizer->token.location = tokenizer->data->data;
+    tokenizer->token.location = number->data;
     sslice_copy(&tokenizer->token.as.number, number);
 }
 
 static inline
 void tokenizer_set_token_string(Tokenizer *tokenizer, SSlice *string) {
     tokenizer->token.type = TOKEN_STRING;
-    tokenizer->token.location = tokenizer->data->data;
+    tokenizer->token.location = string->data;
     sslice_copy(&tokenizer->token.as.string, string);
 }
 
@@ -127,7 +154,7 @@ void tokenizer_set_token_keyword(Tokenizer *tokenizer, Keyword keyword) {
 static inline
 void tokenizer_set_token_identifier(Tokenizer *tokenizer, SSlice *identifier) {
     tokenizer->token.type = TOKEN_IDENTIFIER;
-    tokenizer->token.location = tokenizer->data->data;
+    tokenizer->token.location = identifier->data;
     sslice_copy(&tokenizer->token.as.identifier, identifier);
 }
 
@@ -149,60 +176,53 @@ bool tokenizer_seek_to_next_code_tag_start(Tokenizer *tokenizer,
 
     while (cursor.byte_len >= 2) {
         rune r;
-        size_t rune_size;
+        SSlice start;
 
-        if (!utf8_get_first_rune_len(cursor.data, &r, &rune_size, status)) {
+        sslice_copy(&start, &cursor);
+
+        if (!sslice_pop_rune(&cursor, &r, status)) {
             return false;
         }
 
-        cursor.len--;
-        cursor.byte_len -= rune_size;
-        cursor.data += rune_size;
-
-        if (r == '\n') {
-            lines_skipped++;
-            columns_skipped = 0;
-            continue;
+        switch (r) {
+            case '\n':
+                lines_skipped++;
+                columns_skipped = 1;
+                continue;
+            case '{':
+                break;
+            default:
+                columns_skipped++;
+                continue;
         }
 
-        if (r != '{') {
-            columns_skipped++;
-            continue;
-        }
-
-        if (!utf8_get_first_rune_len(cursor.data, &r, &rune_size, status)) {
+        if (!sslice_pop_rune(&cursor, &r, status)) {
             return false;
         }
 
-        cursor.len--;
-        cursor.byte_len -= rune_size;
-        cursor.data += rune_size;
-
-        columns_skipped++;
-
-        if (r != '{') {
-            continue;
+        switch (r) {
+            case '\n':
+                lines_skipped++;
+                columns_skipped = 1;
+                continue;
+            case '{':
+                break;
+            default:
+                columns_skipped += 2;
+                continue;
         }
 
-        cursor.len--;
-        cursor.byte_len -= rune_size;
-        cursor.data += rune_size;
+        if (!sslice_pop_rune(&cursor, &r, status)) {
+            return false;
+        }
 
-        sslice_copy(tokenizer->data, &cursor);
+        if (r != ' ') {
+            return invalid_syntax(status);
+        }
+
+        sslice_copy(tokenizer->data, &start);
         tokenizer->line += lines_skipped;
-        tokenizer->column = columns_skipped;
-
-        if (!tokenizer_skip_rune_if_equals(tokenizer, ' ', status)) {
-            if (status_match(status, "sslice", SSLICE_NOT_EQUAL)) {
-                return invalid_syntax(status);
-            }
-
-            return false;
-        }
-
-        tokenizer->data->len--;
-        tokenizer->data->byte_len--;
-        tokenizer->data->data++;
+        tokenizer->column = columns_skipped + 1;
 
         return status_ok(status);
     }
@@ -211,27 +231,52 @@ bool tokenizer_seek_to_next_code_tag_start(Tokenizer *tokenizer,
 }
 
 static
+bool tokenizer_handle_raw(Tokenizer *tokenizer, Status *status) {
+    SSlice raw_text;
+    SSlice cursor;
+
+    /* {{ raw }} is 9 runes */
+    if (!tokenizer_skip_runes(tokenizer, 9, status)) {
+        return false;
+    }
+
+    sslice_copy(&raw_text, tokenizer->data);
+    sslice_copy(&cursor, tokenizer->data);
+
+    if (!sslice_seek_to_cstr(&cursor, "{{ endraw }}", status)) {
+        if (status_match(status, "base", ERROR_NOT_FOUND)) {
+            return hanging_raw(status);
+        }
+
+        return false;
+    }
+
+    if (!sslice_truncate_at_subslice(&raw_text, &cursor, status)) {
+        return false;
+    }
+
+    tokenizer_set_token_raw(tokenizer, &raw_text);
+
+    if (!tokenizer_seek_past_subslice(tokenizer, &raw_text, status)) {
+        return false;
+    }
+
+    /* {{ endraw }} is 12 runes */
+    return tokenizer_skip_runes(tokenizer, 12, status);
+}
+
+static
 bool tokenizer_handle_number(Tokenizer *tokenizer, Status *status) {
     SSlice cursor;
     SSlice number;
+    rune r;
     bool found_at_least_one_digit = false;
 
     sslice_copy(&number, tokenizer->data);
     sslice_copy(&cursor, tokenizer->data);
 
-    do {
-        rune r;
-        bool is_digit;
-
-        if (!sslice_get_first_rune(&cursor, &r, status)) {
-            if (status_match(status, "sslice", SSLICE_EMPTY)) {
-                return unexpected_eof(status);
-            }
-
-            return false;
-        }
-
-        is_digit = rune_is_digit(r);
+    while (sslice_get_first_rune(&cursor, &r, status)) {
+        bool is_digit = rune_is_digit(r);
 
         if (is_digit) {
             found_at_least_one_digit = true;
@@ -240,7 +285,19 @@ bool tokenizer_handle_number(Tokenizer *tokenizer, Status *status) {
         if (!(is_digit || (r == ',') || (r == '.'))) {
             break;
         }
-    } while (sslice_skip_rune(&cursor, status));
+
+        if (!sslice_skip_rune(&cursor, status)) {
+            return false;
+        }
+    }
+
+    if (!status_is_ok(status)) {
+        if (status_match(status, "sslice", SSLICE_EMPTY)) {
+            return unexpected_eof(status);
+        }
+
+        return false;
+    }
 
     if (!found_at_least_one_digit) {
         return invalid_number_format(status);
@@ -258,6 +315,7 @@ bool tokenizer_handle_number(Tokenizer *tokenizer, Status *status) {
 static
 bool tokenizer_handle_string(Tokenizer *tokenizer, rune r, Status *status) {
     SSlice string;
+    SSlice cursor;
 
     sslice_copy(&string, tokenizer->data);
 
@@ -265,13 +323,23 @@ bool tokenizer_handle_string(Tokenizer *tokenizer, rune r, Status *status) {
         return false;
     }
 
-    if (!sslice_truncate_at(&string, r, status)) {
+    sslice_copy(&cursor, &string);
+
+    if (!sslice_seek_to(&cursor, r, status)) {
+        if (status_match(status, "base", ERROR_NOT_FOUND)) {
+            return unexpected_eof(status);
+        }
+
+        return false;
+    }
+
+    if (!sslice_truncate_at_subslice(&string, &cursor, status)) {
         return false;
     }
 
     tokenizer_set_token_string(tokenizer, &string);
 
-    return tokenizer_skip_runes(tokenizer, string.len + 1, status);
+    return tokenizer_skip_runes(tokenizer, string.len + 2, status);
 }
 
 static
@@ -386,43 +454,56 @@ bool tokenizer_handle_symbol(Tokenizer *tokenizer, rune r, Status *status) {
 
 static
 bool tokenizer_handle_word(Tokenizer *tokenizer, Status *status) {
-    SSlice cursor;
-    rune r;
-
-    sslice_copy(&cursor, tokenizer->data);
-
-    if (!sslice_truncate_at_whitespace(&cursor, status)) {
-        return false;
-    }
-
     for (Keyword kw = KEYWORD_FIRST; kw < KEYWORD_MAX; kw++) {
-        if (sslice_equals_cstr(&cursor, KeywordValues[kw])) {
-            tokenizer_set_token_keyword(tokenizer, kw);
+        if (sslice_starts_with_cstr(tokenizer->data, KeywordValues[kw])) {
+            SSlice cursor;
+            size_t keyword_length = strlen(KeywordValues[kw]);
 
-            return tokenizer_seek_past_subslice(tokenizer, &cursor, status);
-        }
-    }
+            sslice_copy(&cursor, tokenizer->data);
 
-    SSlice identifier;
-    sslice_copy(&identifier, tokenizer->data);
-
-    while (sslice_pop_rune(&cursor, &r, status)) {
-        if (!(rune_is_alpha(r) || rune_is_digit(r) || r == '_')) {
-            if (!sslice_truncate_at_subslice(&identifier, &cursor, status)) {
+            if (!sslice_skip_runes(&cursor, keyword_length, status)) {
                 return false;
             }
 
-            tokenizer_set_token_identifier(tokenizer, &identifier);
+            if (!sslice_first_rune_equals(&cursor, ' ', status)) {
+                if (status_match(status, "base", ERROR_NOT_EQUAL)) {
+                    continue;
+                }
 
-            return tokenizer_seek_past_subslice(tokenizer, &cursor, status);
+                return false;
+            }
+
+            tokenizer_set_token_keyword(tokenizer, kw);
+
+            return tokenizer_skip_runes(tokenizer, keyword_length, status);
         }
     }
 
-    if (status_match(status, "sslice", SSLICE_EMPTY)) {
-        return unexpected_eof(status);
+    rune r;
+    SSlice cursor;
+    SSlice identifier;
+
+    sslice_copy(&cursor, tokenizer->data);
+    sslice_copy(&identifier, tokenizer->data);
+
+    while (sslice_get_first_rune(&cursor, &r, status)) {
+        if (rune_is_alpha(r) || rune_is_digit(r) || r == '_' || r == '.') {
+            if (!sslice_skip_rune(&cursor, status)) {
+                return false;
+            }
+            continue;
+        }
+
+        if (!sslice_truncate_at_subslice(&identifier, &cursor, status)) {
+            return false;
+        }
+
+        tokenizer_set_token_identifier(tokenizer, &identifier);
+
+        return tokenizer_seek_past_subslice(tokenizer, &identifier, status);
     }
 
-    return false;
+    return not_handled(status);
 }
 
 static
@@ -475,40 +556,6 @@ static
 bool tokenizer_load_next_code_token(Tokenizer *tokenizer, Status *status) {
     rune r;
 
-    if (sslice_starts_with_cstr(tokenizer->data, "{{ raw }}")) {
-        SSlice raw_text;
-        SSlice cursor;
-
-        /* {{ raw }} is 9 runes */
-        if (!tokenizer_skip_runes(tokenizer, 9, status)) {
-            return false;
-        }
-
-        sslice_copy(&raw_text, tokenizer->data);
-        sslice_copy(&cursor, tokenizer->data);
-
-        if (!sslice_seek_to_cstr(&cursor, "{{ endraw }}", status)) {
-            if (status_match(status, "base", ERROR_NOT_FOUND)) {
-                return hanging_raw(status);
-            }
-
-            return false;
-        }
-
-        if (!sslice_truncate_at_subslice(&raw_text, &cursor, status)) {
-            return false;
-        }
-
-        tokenizer_set_token_text(tokenizer, &raw_text);
-
-        if (!tokenizer_seek_past_subslice(tokenizer, &raw_text, status)) {
-            return false;
-        }
-
-        /* {{ endraw }} is 12 runes */
-        return tokenizer_skip_runes(tokenizer, 12, status);
-    }
-
     if (!sslice_get_first_rune(tokenizer->data, &r, status)) {
         if (status_match(status, "sslice", SSLICE_EMPTY)) {
             return unexpected_eof(status);
@@ -525,7 +572,7 @@ bool tokenizer_load_next_code_token(Tokenizer *tokenizer, Status *status) {
         return tokenizer_handle_string(tokenizer, r, status);
     }
 
-    if (rune_is_digit(r) || r == '+' || r == '-' || r == '.') {
+    if (rune_is_digit(r) || r == '.') {
         return tokenizer_handle_number(tokenizer, status);
     }
 
@@ -533,10 +580,12 @@ bool tokenizer_load_next_code_token(Tokenizer *tokenizer, Status *status) {
         return tokenizer_handle_word(tokenizer, status);
     }
 
-    if (!tokenizer_handle_symbol(tokenizer, r, status)) {
-        if (!status_match(status, "tokenizer", TOKENIZER_TOKEN_NOT_HANDLED)) {
-            return false;
-        }
+    if (tokenizer_handle_symbol(tokenizer, r, status)) {
+        return status_ok(status);
+    }
+
+    if (status_match(status, "tokenizer", TOKENIZER_TOKEN_NOT_HANDLED)) {
+        return false;
     }
 
     return unknown_token(status);
@@ -557,36 +606,51 @@ void tokenizer_clear(Tokenizer *tokenizer) {
 }
 
 bool tokenizer_load_next(Tokenizer *tokenizer, Status *status) {
-    if (tokenizer->in_code) {
-        if (sslice_equals_cstr(tokenizer->data, " }}")) {
-            if (!tokenizer_skip_runes(tokenizer, 3, status)) {
-                return false;
-            }
+    SSlice start;
 
-            tokenizer->in_code = false;
-        }
-        else if (sslice_equals_cstr(tokenizer->data, "}}")) {
+    if (tokenizer->in_code) {
+        if (sslice_starts_with_cstr(tokenizer->data, "}}")) {
             return invalid_syntax(status);
         }
-        else {
+
+        if (!sslice_starts_with_cstr(tokenizer->data, " }}")) {
             return tokenizer_load_next_code_token(tokenizer, status);
         }
+
+        if (!tokenizer_skip_runes(tokenizer, 3, status)) {
+            return false;
+        }
+
+        tokenizer->in_code = false;
     }
 
     if (sslice_empty(tokenizer->data)) {
         return eof(status);
     }
 
+    sslice_copy(&start, tokenizer->data);
+
     if (tokenizer_seek_to_next_code_tag_start(tokenizer, status)) {
-        tokenizer_set_token_text(tokenizer, tokenizer->data);
+        if (tokenizer->data->data != start.data) {
+            if (!sslice_truncate_at_subslice(&start, tokenizer->data, status)) {
+                return false;
+            }
+
+            tokenizer_set_token_text(tokenizer, &start);
+
+            return status_ok(status);
+        }
+
+        if (sslice_starts_with_cstr(tokenizer->data, "{{ raw }}")) {
+            return tokenizer_handle_raw(tokenizer, status);
+        }
 
         if (!tokenizer_skip_runes(tokenizer, 3, status)) {
             return false;
         }
 
         tokenizer->in_code = true;
-
-        return status_ok(status);
+        return tokenizer_load_next_code_token(tokenizer, status);
     }
 
     if (!status_match(status, "base", ERROR_NOT_FOUND)) {

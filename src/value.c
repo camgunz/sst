@@ -25,6 +25,13 @@
     "Conversion failure"                           \
 )
 
+#define invalid_boolean_value(status) status_failure( \
+    status,                                           \
+    "value",                                          \
+    VALUE_INVALID_BOOLEAN_VALUE,                      \
+    "Invalid boolean value"                           \
+)
+
 static size_t key_to_hash(const void *key, size_t seed) {
     String *s = (String *)key;
 
@@ -42,40 +49,55 @@ static bool key_equal(const void *key1, const void *key2) {
     return (s1->byte_len == s2->byte_len) && (strcmp(s1->data, s2->data) == 0);
 }
 
-bool value_init(Value *value, Status *status) {
-    switch (value->type) {
-        case VALUE_BOOLEAN:
-            value->as.boolean = false;
-            return status_ok(status);
-        case VALUE_NUMBER:
-            decimal_from_zero(&value->as.number);
-            return status_ok(status);
-        case VALUE_STRING:
-            string_clear(&value->as.string);
-            return status_ok(status);
-        case VALUE_ARRAY:
-            parray_init(&value->as.array);
-            return status_ok(status);
-        case VALUE_TABLE:
-            return table_init(
-                &value->as.table,
-                key_to_hash,
-                value_to_key,
-                key_equal,
-                0,
-                status
-            );
-        default:
-            return unknown_type(status);
-    }
+void value_init_boolean(Value *value, bool b) {
+    value_set_type(value, VALUE_BOOLEAN);
+    value->as.boolean = b;
+}
+
+bool value_init_number(Value *value, const char *num, DecimalContext *ctx,
+                                                      Status *status) {
+    value_set_type(value, VALUE_NUMBER);
+    return decimal_init_cstr(
+        &value->as.number,
+        num,
+        ctx,
+        value->decimal_data,
+        status
+    );
+}
+
+bool value_init_string(Value *value, const char *string, Status *status) {
+    value_set_type(value, VALUE_STRING);
+    return string_init(&value->as.string, string, status);
+}
+
+void value_init_array(Value *value) {
+    value_set_type(value, VALUE_ARRAY);
+    parray_init(&value->as.array);
+}
+
+bool value_init_table(Value *value, Status *status) {
+    value_set_type(value, VALUE_TABLE);
+    return table_init(
+        &value->as.table,
+        key_to_hash,
+        value_to_key,
+        key_equal,
+        0,
+        status
+    );
 }
 
 bool value_init_boolean_from_sslice(Value *value, SSlice *ss, Status *status) {
-    if (!value_set_type(value, VALUE_BOOLEAN, status)) {
-        return false;
+    if (sslice_equals_cstr(ss, "true")) {
+        value_init_boolean(value, true);
     }
-
-    value->as.boolean = sslice_equals_cstr(ss, "true");
+    else if (sslice_equals_cstr(ss, "false")) {
+        value_init_boolean(value, false);
+    }
+    else {
+        return invalid_boolean_value(status);
+    }
 
     return status_ok(status);
 }
@@ -83,19 +105,14 @@ bool value_init_boolean_from_sslice(Value *value, SSlice *ss, Status *status) {
 bool value_init_number_from_sslice(Value *value, SSlice *ss,
                                                  DecimalContext *ctx,
                                                  Status *status) {
-    char *num = NULL;
-
-    if (!value_set_type(value, VALUE_NUMBER, status)) {
-        return false;
-    }
-
-    num = sslice_to_cstr(ss);
+    char *num = sslice_to_cstr(ss);
 
     if (!num) {
         return alloc_failure(status);
     }
 
-    if (!decimal_from_cstr(&value->as.number, num, ctx, status)) {
+    if (!value_init_number(value, num, ctx, status)) {
+        free(num);
         return false;
     }
 
@@ -105,26 +122,19 @@ bool value_init_number_from_sslice(Value *value, SSlice *ss,
 }
 
 bool value_init_string_from_sslice(Value *value, SSlice *ss, Status *status) {
-    if (!value_set_type(value, VALUE_STRING, status)) {
-        return false;
-    }
-
-    return string_init_full(
-        &value->as.string,
-        ss->data,
-        ss->len,
-        ss->byte_len,
-        status
-    );
+    value_set_type(value, VALUE_STRING);
+    return string_init_from_sslice(&value->as.string, ss, status);
 }
 
-bool value_clear(Value *value, Status *status) {
+void value_clear(Value *value) {
     switch (value->type) {
+        case VALUE_NONE:
+            break;
         case VALUE_BOOLEAN:
             value->as.boolean = false;
             break;
         case VALUE_NUMBER:
-            decimal_from_zero(&value->as.number);
+            decimal_set_zero(&value->as.number);
             break;
         case VALUE_STRING:
             string_clear(&value->as.string);
@@ -133,28 +143,11 @@ bool value_clear(Value *value, Status *status) {
             parray_clear(&value->as.array);
             break;
         case VALUE_TABLE:
-            if (!table_init( &value->as.table, key_to_hash, value_to_key,
-                                                            key_equal,
-                                                            0,
-                                                            status)) {
-                return false;
-            }
+            table_clear(&value->as.table);
             break;
         default:
-            return unknown_type(status);
+            break;
     }
-
-    return status_ok(status);
-}
-
-bool value_set_type(Value *value, ValueType type, Status *status) {
-    if (!value_clear(value, status)) {
-        return false;
-    }
-
-    value->type = type;
-
-    return status_ok(status);
 }
 
 bool value_index(Value *value, size_t index, Value **element, Status *status) {
@@ -197,9 +190,7 @@ bool value_add(Value *result, Value *op1, Value *op2, DecimalContext *ctx,
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_NUMBER, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_NUMBER);
 
     if (!decimal_add(&result->as.number, &op1->as.number, &op2->as.number,
                                                           ctx,
@@ -216,9 +207,7 @@ bool value_sub(Value *result, Value *op1, Value *op2, DecimalContext *ctx,
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_NUMBER, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_NUMBER);
 
     if (!decimal_sub(&result->as.number, &op1->as.number, &op2->as.number,
                                                           ctx,
@@ -235,9 +224,7 @@ bool value_mul(Value *result, Value *op1, Value *op2, DecimalContext *ctx,
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_NUMBER, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_NUMBER);
 
     if (!decimal_mul(&result->as.number, &op1->as.number, &op2->as.number,
                                                           ctx,
@@ -254,9 +241,7 @@ bool value_div(Value *result, Value *op1, Value *op2, DecimalContext *ctx,
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_NUMBER, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_NUMBER);
 
     if (!decimal_div(&result->as.number, &op1->as.number, &op2->as.number,
                                                           ctx,
@@ -273,9 +258,7 @@ bool value_rem(Value *result, Value *op1, Value *op2, DecimalContext *ctx,
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_NUMBER, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_NUMBER);
 
     if (!decimal_rem(&result->as.number, &op1->as.number, &op2->as.number,
                                                           ctx,
@@ -291,9 +274,7 @@ bool value_and(Value *result, Value *op1, Value *op2, Status *status) {
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_BOOLEAN, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_BOOLEAN);
 
     result->as.boolean = op1->as.boolean && op2->as.boolean;
 
@@ -305,9 +286,7 @@ bool value_or(Value *result, Value *op1, Value *op2, Status *status) {
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_BOOLEAN, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_BOOLEAN);
 
     result->as.boolean = op1->as.boolean || op2->as.boolean;
 
@@ -319,9 +298,7 @@ bool value_not(Value *result, Value *op1, Status *status) {
         return invalid_type(status);
     }
 
-    if (!value_set_type(result, VALUE_BOOLEAN, status)) {
-        return false;
-    }
+    value_set_type(result, VALUE_BOOLEAN);
 
     result->as.boolean = !op1->as.boolean;
 
@@ -329,11 +306,8 @@ bool value_not(Value *result, Value *op1, Status *status) {
 }
 
 bool value_equal(Value *result, Value *op1, Value *op2, Status *status) {
-    if (!value_set_type(result, VALUE_BOOLEAN, status)) {
-        return false;
-    }
-
     if ((op1->type == VALUE_BOOLEAN) && (op2->type == VALUE_BOOLEAN)) {
+        value_set_type(result, VALUE_BOOLEAN);
         result->as.boolean = op1->as.boolean == op2->as.boolean;
     }
     else if ((op1->type == VALUE_NUMBER) && (op2->type == VALUE_NUMBER)) {
@@ -343,9 +317,11 @@ bool value_equal(Value *result, Value *op1, Value *op2, Status *status) {
             return false;
         }
 
+        value_set_type(result, VALUE_BOOLEAN);
         result->as.boolean = cmp_res == 0;
     }
     else if ((op1->type == VALUE_STRING) && (op2->type == VALUE_STRING)) {
+        value_set_type(result, VALUE_BOOLEAN);
         result->as.boolean = (
             (op1->as.string.byte_len == op2->as.string.byte_len) &&
             (strcmp(op1->as.string.data, op2->as.string.data) == 0)
@@ -393,6 +369,30 @@ bool value_to_cstr(char **s, Value *value, Status *status) {
     *s = local_s;
 
     return status_ok(status);
+}
+
+void value_free(Value *value) {
+    switch (value->type) {
+        case VALUE_NONE:
+            break;
+        case VALUE_BOOLEAN:
+            value->as.boolean = false;
+            break;
+        case VALUE_NUMBER:
+            decimal_free(&value->as.number);
+            break;
+        case VALUE_STRING:
+            string_free(&value->as.string);
+            break;
+        case VALUE_ARRAY:
+            parray_free(&value->as.array);
+            break;
+        case VALUE_TABLE:
+            table_free(&value->as.table);
+            break;
+    }
+
+    value->type = VALUE_NONE;
 }
 
 /* vi: set et ts=4 sw=4: */
