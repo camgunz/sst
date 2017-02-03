@@ -117,13 +117,6 @@ void tokenizer_set_token_text(Tokenizer *tokenizer, SSlice *text) {
 }
 
 static inline
-void tokenizer_set_token_raw(Tokenizer *tokenizer, SSlice *raw_text) {
-    tokenizer->token.type = TOKEN_RAW;
-    tokenizer->token.location = raw_text->data;
-    sslice_copy(&tokenizer->token.as.raw, raw_text);
-}
-
-static inline
 void tokenizer_set_token_number(Tokenizer *tokenizer, SSlice *number) {
     tokenizer->token.type = TOKEN_NUMBER;
     tokenizer->token.location = number->data;
@@ -255,7 +248,7 @@ bool tokenizer_handle_raw(Tokenizer *tokenizer, Status *status) {
         return false;
     }
 
-    tokenizer_set_token_raw(tokenizer, &raw_text);
+    tokenizer_set_token_text(tokenizer, &raw_text);
 
     if (!tokenizer_seek_past_subslice(tokenizer, &raw_text, status)) {
         return false;
@@ -371,6 +364,12 @@ bool tokenizer_handle_symbol(Tokenizer *tokenizer, rune r, Status *status) {
             return tokenizer_skip_rune(tokenizer, status);
         case ',':
             tokenizer_set_token_symbol(tokenizer, SYMBOL_COMMA);
+            return tokenizer_skip_rune(tokenizer, status);
+        case '[':
+            tokenizer_set_token_symbol(tokenizer, SYMBOL_OBRACKET);
+            return tokenizer_skip_rune(tokenizer, status);
+        case ']':
+            tokenizer_set_token_symbol(tokenizer, SYMBOL_CBRACKET);
             return tokenizer_skip_rune(tokenizer, status);
         default:
             break;

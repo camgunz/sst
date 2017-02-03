@@ -141,6 +141,10 @@ ADD_EXECUTABLE(sst ${LIBSST_SOURCE_FILES}
 TARGET_LINK_LIBRARIES(sst sststaticlib)
 
 ADD_EXECUTABLE(sst_test ${LIBSST_SOURCE_FILES}
+  ${CMAKE_SOURCE_DIR}/tests/value.c
+  ${CMAKE_SOURCE_DIR}/tests/tokenizer.c
+  ${CMAKE_SOURCE_DIR}/tests/lexer.c
+  ${CMAKE_SOURCE_DIR}/tests/parser.c
   ${CMAKE_SOURCE_DIR}/tests/main.c
 )
 TARGET_LINK_LIBRARIES(sst_test ${LIBSST_LIBRARIES} ${SSTTEST_LIBRARIES})
