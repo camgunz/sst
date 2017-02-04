@@ -13,8 +13,17 @@
 
 static inline bool tokenizer_expect(Tokenizer *tokenizer, TokenType type,
                                                           Status *status) {
-    return tokenizer_load_next(tokenizer, status) &&
-           tokenizer->token.type == type;
+    if (!tokenizer_load_next(tokenizer, status)) {
+        printf("tokenizer_load_next failed: %s\n", status->message);
+        return false;
+    }
+
+    if (tokenizer->token.type != type) {
+        printf("Expected token type %d, got %d\n", type, tokenizer->token.type);
+        return false;
+    }
+
+    return status_ok(status);
 }
 
 static inline bool tokenizer_expect_keyword(Tokenizer *tokenizer,

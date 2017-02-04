@@ -275,7 +275,7 @@ bool tokenizer_handle_number(Tokenizer *tokenizer, Status *status) {
             found_at_least_one_digit = true;
         }
 
-        if (!(is_digit || (r == ',') || (r == '.'))) {
+        if (!(is_digit || (r == '_') || (r == '.'))) {
             break;
         }
 
