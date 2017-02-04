@@ -32,6 +32,20 @@
     "Invalid boolean value"                           \
 )
 
+#define invalid_function_argument_type(status) status_failure( \
+    status,                                                    \
+    "value",                                                   \
+    VALUE_INVALID_FUNCTION_ARGUMENT_TYPE,                      \
+    "Invalid function argument type"                           \
+)
+
+#define mismatched_function_arity_and_types(status) status_failure( \
+    status,                                                         \
+    "value",                                                        \
+    VALUE_MISMATCHED_FUNCTION_ARITY_AND_TYPES,                      \
+    "Mismatched function arity and types"                           \
+)
+
 static size_t key_to_hash(const void *key, size_t seed) {
     String *s = (String *)key;
 
@@ -68,6 +82,7 @@ bool value_init_number(Value *value, const char *num, DecimalContext *ctx,
 
 bool value_init_string(Value *value, const char *string, Status *status) {
     value_set_type(value, VALUE_STRING);
+
     return string_init(&value->as.string, string, status);
 }
 
@@ -78,6 +93,7 @@ void value_init_array(Value *value) {
 
 bool value_init_table(Value *value, Status *status) {
     value_set_type(value, VALUE_TABLE);
+
     return table_init(
         &value->as.table,
         key_to_hash,
@@ -86,6 +102,36 @@ bool value_init_table(Value *value, Status *status) {
         0,
         status
     );
+}
+
+bool value_init_function(Value *value, unsigned int arity,
+                                       const char *argument_types,
+                                       Status *status) {
+    const char *argument_type;
+
+    for (argument_type = argument_types; *argument_type; argument_type++) {
+        switch (*argument_type) {
+            case 'b':
+            case 'n':
+            case 'f':
+            case 'a':
+            case 's':
+            case 't':
+                break;
+            default:
+                return invalid_function_argument_type(status);
+        }
+    }
+
+    if (((size_t)(argument_type - argument_types)) != arity) {
+        return mismatched_function_arity_and_types(status);
+    }
+
+    value_set_type(value, VALUE_FUNCTION);
+    value->as.function.arity = arity;
+    value->as.function.argument_types = argument_types;
+
+    return status_ok(status);
 }
 
 bool value_init_boolean_from_sslice(Value *value, SSlice *ss, Status *status) {
@@ -144,6 +190,10 @@ void value_clear(Value *value) {
             break;
         case VALUE_TABLE:
             table_clear(&value->as.table);
+            break;
+        case VALUE_FUNCTION:
+            value->as.function.arity = 0;
+            value->as.function.argument_types = NULL;
             break;
         default:
             break;
@@ -389,6 +439,10 @@ void value_free(Value *value) {
             break;
         case VALUE_TABLE:
             table_free(&value->as.table);
+            break;
+        case VALUE_FUNCTION:
+            value->as.function.arity = 0;
+            value->as.function.argument_types = NULL;
             break;
     }
 

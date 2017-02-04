@@ -6,6 +6,8 @@ enum {
     VALUE_INVALID_TYPE,
     VALUE_CONVERSION_FAILURE,
     VALUE_INVALID_BOOLEAN_VALUE,
+    VALUE_INVALID_FUNCTION_ARGUMENT_TYPE,
+    VALUE_MISMATCHED_FUNCTION_ARITY_AND_TYPES,
 };
 
 typedef enum {
@@ -15,7 +17,13 @@ typedef enum {
     VALUE_STRING,
     VALUE_ARRAY,
     VALUE_TABLE,
+    VALUE_FUNCTION,
 } ValueType;
+
+typedef struct {
+    unsigned int arity;
+    const char *argument_types;
+} Function;
 
 typedef struct {
     ValueType type;
@@ -26,6 +34,7 @@ typedef struct {
         bool boolean;
         PArray array;
         Table table;
+        Function function;
     } as;
 } Value;
 
@@ -35,6 +44,9 @@ bool value_init_number(Value *value, const char *num, DecimalContext *ctx,
 bool value_init_string(Value *value, const char *string, Status *status);
 void value_init_array(Value *value);
 bool value_init_table(Value *value, Status *status);
+bool value_init_function(Value *value, unsigned int arity,
+                                       const char *argument_types,
+                                       Status *status);
 
 bool value_init_boolean_from_sslice(Value *value, SSlice *ss, Status *status);
 bool value_init_number_from_sslice(Value *value, SSlice *ss,
