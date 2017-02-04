@@ -202,11 +202,9 @@ bool lexer_set_token_operator(Lexer *lexer, Operator op, Status *status) {
 }
 
 static inline
-bool lexer_set_token_lookup(Lexer *lexer, SSlice *lookup,
-                                          const char *location,
-                                          Status *status) {
+bool lexer_set_token_lookup(Lexer *lexer, SSlice *lookup, Status *status) {
     lexer->code_token.type = CODE_TOKEN_LOOKUP;
-    lexer->code_token.location = location;
+    lexer->code_token.location = lookup->data;
     sslice_copy(&lexer->code_token.as.lookup, lookup);
 
     return lexer_skip_whitespace(lexer, status);
@@ -214,10 +212,9 @@ bool lexer_set_token_lookup(Lexer *lexer, SSlice *lookup,
 
 static inline
 bool lexer_set_token_function(Lexer *lexer, SSlice *function,
-                                            const char *location,
                                             Status *status) {
     lexer->code_token.type = CODE_TOKEN_FUNCTION_START;
-    lexer->code_token.location = location;
+    lexer->code_token.location = function->data;
     sslice_copy(&lexer->code_token.as.function, function);
 
     return lexer_push_state(lexer, LEXER_STATE_FUNCTION, status);
@@ -267,10 +264,9 @@ bool lexer_set_token_array_element_end(Lexer *lexer, Status *status) {
 
 static inline
 bool lexer_set_token_index(Lexer *lexer, SSlice *index,
-                                         const char *location,
                                          Status *status) {
     lexer->code_token.type = CODE_TOKEN_INDEX_START;
-    lexer->code_token.location = location;
+    lexer->code_token.location = index->data;
     sslice_copy(&lexer->code_token.as.index, index);
 
     return lexer_push_state(lexer, LEXER_STATE_INDEX, status);
@@ -399,9 +395,9 @@ bool lexer_handle_symbol_token(Lexer *lexer, Status *status) {
 
 static
 bool lexer_handle_identifier_token(Lexer *lexer, Status *status) {
-    Token token;
+    SSlice identifier;
 
-    memcpy(&token, &lexer->tokenizer.token, sizeof(Token));
+    sslice_copy(&identifier, &lexer->tokenizer.token.as.identifier);
 
     if (!tokenizer_load_next(&lexer->tokenizer, status)) {
         return false;
@@ -409,21 +405,11 @@ bool lexer_handle_identifier_token(Lexer *lexer, Status *status) {
 
     if (lexer->tokenizer.token.type == TOKEN_SYMBOL) {
         if (lexer->tokenizer.token.as.symbol == SYMBOL_OPAREN) {
-            return lexer_set_token_function(
-                lexer,
-                &token.as.identifier,
-                token.location,
-                status
-            );
+            return lexer_set_token_function(lexer, &identifier, status);
         }
 
         if (lexer->tokenizer.token.as.symbol == SYMBOL_OBRACKET) {
-            return lexer_set_token_index(
-                lexer,
-                &token.as.identifier,
-                token.location,
-                status
-            );
+            return lexer_set_token_index(lexer, &identifier, status);
         }
 
         if (lexer->tokenizer.token.as.symbol != SYMBOL_CPAREN) {
@@ -433,12 +419,7 @@ bool lexer_handle_identifier_token(Lexer *lexer, Status *status) {
 
     lexer->already_loaded_next = true;
 
-    return lexer_set_token_lookup(
-        lexer,
-        &token.as.identifier,
-        token.location,
-        status
-    );
+    return lexer_set_token_lookup(lexer, &identifier, status);
 }
 
 void lexer_clear(Lexer *lexer) {
