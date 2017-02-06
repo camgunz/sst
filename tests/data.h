@@ -32,4 +32,7 @@
 "{{ include '/srv/http/templates/footer.txt' }}\n"                         \
 "Last little bit down here\n"
 
+#define EXPRESSION_TEMPLATE "{{ 3 + 4 * 2 / (1 - 5) ^ 2 ^ 3 }}"
+#define EXPRESSION_ANSWER "3.0001220703125"
+
 #endif

@@ -53,7 +53,7 @@ Maybe.  Here's the plan to avoid disaster:
 5. Use sanitizers during development
 
 SST is written in what I would consider clear, readable, and safe C.  It is
-also not very big: currently the line count is ~1,900 LOC and will probably
+also not very big: currently the line count is ~2,500 LOC and will probably
 stay under 5,000 LOC when fully implemented.  It should be easy to understand
 and thus easy to audit.
 
@@ -68,7 +68,7 @@ I wanted an engine I could:
 - Use arbitrary-precision arithmetic
 
 Basically there are no templating languages in C, C++, Go or Rust that
-don't use regexes and do use decimals, so I wrote one.
+use decimals and not regexes, so I wrote one.
 
 ## What does SST stand for?
 

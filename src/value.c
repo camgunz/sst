@@ -104,36 +104,6 @@ bool value_init_table(Value *value, Status *status) {
     );
 }
 
-bool value_init_function(Value *value, unsigned int arity,
-                                       const char *argument_types,
-                                       Status *status) {
-    const char *argument_type;
-
-    for (argument_type = argument_types; *argument_type; argument_type++) {
-        switch (*argument_type) {
-            case 'b':
-            case 'n':
-            case 'f':
-            case 'a':
-            case 's':
-            case 't':
-                break;
-            default:
-                return invalid_function_argument_type(status);
-        }
-    }
-
-    if (((size_t)(argument_type - argument_types)) != arity) {
-        return mismatched_function_arity_and_types(status);
-    }
-
-    value_set_type(value, VALUE_FUNCTION);
-    value->as.function.arity = arity;
-    value->as.function.argument_types = argument_types;
-
-    return status_ok(status);
-}
-
 bool value_init_boolean_from_sslice(Value *value, SSlice *ss, Status *status) {
     if (sslice_equals_cstr(ss, "true")) {
         value_init_boolean(value, true);
@@ -190,10 +160,6 @@ void value_clear(Value *value) {
             break;
         case VALUE_TABLE:
             table_clear(&value->as.table);
-            break;
-        case VALUE_FUNCTION:
-            value->as.function.arity = 0;
-            value->as.function.argument_types = NULL;
             break;
         default:
             break;
@@ -439,10 +405,6 @@ void value_free(Value *value) {
             break;
         case VALUE_TABLE:
             table_free(&value->as.table);
-            break;
-        case VALUE_FUNCTION:
-            value->as.function.arity = 0;
-            value->as.function.argument_types = NULL;
             break;
     }
 

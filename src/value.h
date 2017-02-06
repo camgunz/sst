@@ -17,7 +17,6 @@ typedef enum {
     VALUE_STRING,
     VALUE_ARRAY,
     VALUE_TABLE,
-    VALUE_FUNCTION,
 } ValueType;
 
 typedef struct {

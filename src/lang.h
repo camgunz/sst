@@ -87,13 +87,18 @@ typedef enum {
 
 #define KEYWORD_FIRST KEYWORD_INCLUDE
 
-typedef struct {
-    const char *value;
-    OperatorCategory category;
-    unsigned char precedence;
-} OperatorInfo;
+typedef enum {
+    OP_ASSOC_NONE,
+    OP_ASSOC_LEFT,
+    OP_ASSOC_RIGHT,
+} OperatorAssociativity;
 
-extern OperatorInfo Operators[OP_MAX];
+typedef struct {
+    OperatorAssociativity assoc;
+    unsigned char prec;
+} OperatorInformation;
+
+extern OperatorInformation OperatorInfo[OP_MAX];
 extern const char *KeywordValues[KEYWORD_MAX];
 extern const char *SymbolValues[SYMBOL_MAX];
 
