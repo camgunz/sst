@@ -24,7 +24,7 @@ OperatorInfo Operators[OP_MAX] = {
 
 const char *KeywordValues[KEYWORD_MAX] = {
     "include", "if", "elif", "else", "endif", "for", "in", "break", "endfor",
-    "raw", "endraw", "range"
+    "raw", "endraw"
 };
 
 const char *SymbolValues[SYMBOL_MAX] = {

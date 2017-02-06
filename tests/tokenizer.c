@@ -11,74 +11,45 @@
 
 #include "data.h"
 
-static inline bool tokenizer_expect(Tokenizer *tokenizer, TokenType type,
-                                                          Status *status) {
-    if (!tokenizer_load_next(tokenizer, status)) {
-        printf("tokenizer_load_next failed: %s\n", status->message);
-        return false;
-    }
+#define texpect(token_type) \
+    if (!tokenizer_load_next(&tokenizer, &status)) { \
+        printf("tokenizer_load_next failed: %s\n", status.message); \
+        assert_true(false); \
+    } \
+    assert_int_equal(tokenizer.token.type, token_type)
 
-    if (tokenizer->token.type != type) {
-        printf("Expected token type %d, got %d\n", type, tokenizer->token.type);
-        return false;
-    }
+#define texpect_keyword(kw) \
+    texpect(TOKEN_KEYWORD); \
+    assert_int_equal(tokenizer.token.as.keyword, kw)
 
-    return status_ok(status);
-}
+#define texpect_space() \
+    texpect(TOKEN_SPACE)
 
-static inline bool tokenizer_expect_keyword(Tokenizer *tokenizer,
-                                            Keyword kw,
-                                            Status *status) {
-    return tokenizer_expect(tokenizer, TOKEN_KEYWORD, status) &&
-           tokenizer->token.as.keyword == kw;
-}
+#define texpect_string(str) \
+    texpect(TOKEN_STRING); \
+    assert_true(sslice_equals_cstr(&tokenizer.token.as.string, str))
 
-static inline bool tokenizer_expect_whitespace(Tokenizer *tokenizer,
-                                               Whitespace ws,
-                                               Status *status) {
-    return tokenizer_expect(tokenizer, TOKEN_WHITESPACE, status) &&
-           tokenizer->token.as.whitespace == ws;
-}
+#define texpect_text(txt) \
+    texpect(TOKEN_TEXT); \
+    assert_true(sslice_equals_cstr(&tokenizer.token.as.text, txt))
 
-static inline bool tokenizer_expect_space(Tokenizer *tokenizer,
-                                          Status *status) {
-    return tokenizer_expect_whitespace(tokenizer, WHITESPACE_SPACE, status);
-}
+#define texpect_identifier(ident) \
+    texpect(TOKEN_IDENTIFIER); \
+    assert_true(sslice_equals_cstr(&tokenizer.token.as.identifier, ident))
 
-static inline bool tokenizer_expect_string(Tokenizer *tokenizer,
-                                           const char *string,
-                                           Status *status) {
-    return tokenizer_expect(tokenizer, TOKEN_STRING, status) &&
-           sslice_equals_cstr(&tokenizer->token.as.string, string);
-}
+#define texpect_symbol(sym) \
+    texpect(TOKEN_SYMBOL); \
+    assert_int_equal(tokenizer.token.as.symbol, sym)
 
-static inline bool tokenizer_expect_text(Tokenizer *tokenizer,
-                                         const char *text,
-                                         Status *status) {
-    return tokenizer_expect(tokenizer, TOKEN_TEXT, status) &&
-           sslice_equals_cstr(&tokenizer->token.as.text, text);
-}
+#define texpect_number(num) \
+    texpect(TOKEN_NUMBER); \
+    assert_true(sslice_equals_cstr(&tokenizer.token.as.number, num))
 
-static inline bool tokenizer_expect_identifier(Tokenizer *tokenizer,
-                                               const char *identifier,
-                                               Status *status) {
-    return tokenizer_expect(tokenizer, TOKEN_IDENTIFIER, status) &&
-           sslice_equals_cstr(&tokenizer->token.as.identifier, identifier);
-}
+#define texpect_code_start() \
+    texpect(TOKEN_CODE_START)
 
-static inline bool tokenizer_expect_symbol(Tokenizer *tokenizer,
-                                           Symbol symbol,
-                                           Status *status) {
-    return tokenizer_expect(tokenizer, TOKEN_SYMBOL, status) &&
-           tokenizer->token.as.symbol == symbol;
-}
-
-static inline bool tokenizer_expect_number(Tokenizer *tokenizer,
-                                           const char *number,
-                                           Status *status) {
-    return tokenizer_expect(tokenizer, TOKEN_NUMBER, status) &&
-           sslice_equals_cstr(&tokenizer->token.as.number, number);
-}
+#define texpect_code_end() \
+    texpect(TOKEN_CODE_END)
 
 void test_tokenizer(void **state) {
     String s;
@@ -97,133 +68,120 @@ void test_tokenizer(void **state) {
     assert_true(string_slice(&s, 0, s.len, &ss, &status));
 
     tokenizer_init(&tokenizer, &ss);
-    assert_true(tokenizer_expect_keyword(
-        &tokenizer, KEYWORD_INCLUDE, &status
-    ));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_string(
-        &tokenizer,
-        "/srv/http/templates/header.txt",
-        &status
-    
-    ));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n\n", &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_IF, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_identifier(
-        &tokenizer, "person.age", &status
-    ));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_symbol(
-        &tokenizer, SYMBOL_GREATER_THAN_OR_EQUAL, &status
-    ));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_number(&tokenizer, "18", &status));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n...\n", &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_ENDIF, &status));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n\n", &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_FOR, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "person", &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_IN, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "people", &status));
-    assert_true(tokenizer_expect_text(
-        &tokenizer, "\n    ", &status
-    ));
-    assert_true(tokenizer_expect_identifier(
-        &tokenizer, "person.name", &status
-    ));
-    assert_true(tokenizer_expect_text(&tokenizer, " owes ", &status));
-    assert_true(tokenizer_expect_identifier(
-        &tokenizer, "person.income", &status
-    ));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_ASTERISK, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "tax_rate", &status));
-    assert_true(tokenizer_expect_text(&tokenizer, " this year!\n", &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_ENDFOR, &status));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n\n", &status));
-    assert_true(tokenizer_expect_text(
-        &tokenizer,
-        "\n    This is how you would use raw }} and {{ markers.\n",
-        &status
-    ));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n", &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_IF, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_identifier(
-        &tokenizer, "upper", &status
-    ));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_OPAREN, &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "message", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_CPAREN, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_EQUAL, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_string(
-        &tokenizer,
-        "OR PUT THEM IN STRINGS {{ }} }} {{",
-        &status
-    ));
-    assert_true(tokenizer_expect_text(
-        &tokenizer,
-        "\nYou guessed the magic message!\n",
-        &status
-    
-    ));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_ENDIF, &status));
-    assert_true(tokenizer_expect_text(
-        &tokenizer, "\n\n", &status
-    ));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_FOR, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "fib", &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_IN, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_OBRACKET, &status));
-    assert_true(tokenizer_expect_number(&tokenizer, "1", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_COMMA, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_number(&tokenizer, "1", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_COMMA, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_number(&tokenizer, "2", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_COMMA, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_number(&tokenizer, "3", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_COMMA, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_number(&tokenizer, "5", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_COMMA, &status));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_number(&tokenizer, "8", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_CBRACKET, &status));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n    Double ", &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "fib", &status));
-    assert_true(tokenizer_expect_text(&tokenizer, ": ", &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "double", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_OPAREN, &status));
-    assert_true(tokenizer_expect_identifier(&tokenizer, "fib", &status));
-    assert_true(tokenizer_expect_symbol(&tokenizer, SYMBOL_CPAREN, &status));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n", &status));
-    assert_true(tokenizer_expect_keyword(&tokenizer, KEYWORD_ENDFOR, &status));
-    assert_true(tokenizer_expect_text(&tokenizer, "\n", &status));
-    assert_true(tokenizer_expect_keyword(
-        &tokenizer, KEYWORD_INCLUDE, &status
-    ));
-    assert_true(tokenizer_expect_space(&tokenizer, &status));
-    assert_true(tokenizer_expect_string(
-        &tokenizer,
-        "/srv/http/templates/footer.txt",
-        &status
-    ));
-    assert_true(tokenizer_expect_text(
-        &tokenizer, "\nLast little bit down here\n", &status
-    ));
+
+    texpect_code_start();
+    texpect_keyword(KEYWORD_INCLUDE);
+    texpect_space();
+    texpect_string("/srv/http/templates/header.txt");
+    texpect_code_end();
+    texpect_text("\n\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_IF);
+    texpect_space();
+    texpect_identifier("person.age");
+    texpect_space();
+    texpect_symbol(SYMBOL_GREATER_THAN_OR_EQUAL);
+    texpect_space();
+    texpect_number("18");
+    texpect_code_end();
+    texpect_text("\n...\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_ENDIF);
+    texpect_code_end();
+    texpect_text("\n\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_FOR);
+    texpect_space();
+    texpect_identifier("person");
+    texpect_space();
+    texpect_keyword(KEYWORD_IN);
+    texpect_space();
+    texpect_identifier("people");
+    texpect_code_end();
+    texpect_text("\n    ");
+    texpect_code_start();
+    texpect_identifier("person.name");
+    texpect_code_end();
+    texpect_text(" owes ");
+    texpect_code_start();
+    texpect_identifier("person.income");
+    texpect_space();
+    texpect_symbol(SYMBOL_ASTERISK);
+    texpect_space();
+    texpect_identifier("tax_rate");
+    texpect_code_end();
+    texpect_text(" this year!\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_ENDFOR);
+    texpect_code_end();
+    texpect_text("\n\n");
+    texpect_text("\n    This is how you would use raw }} and {{ markers.\n");
+    texpect_text("\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_IF);
+    texpect_space();
+    texpect_identifier("upper");
+    texpect_symbol(SYMBOL_OPAREN);
+    texpect_identifier("message");
+    texpect_symbol(SYMBOL_CPAREN);
+    texpect_space();
+    texpect_symbol(SYMBOL_EQUAL);
+    texpect_space();
+    texpect_string("OR PUT THEM IN STRINGS {{ }} }} {{");
+    texpect_code_end();
+    texpect_text("\nYou guessed the magic message!\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_ENDIF);
+    texpect_code_end();
+    texpect_text("\n\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_FOR);
+    texpect_space();
+    texpect_identifier("fib");
+    texpect_space();
+    texpect_keyword(KEYWORD_IN);
+    texpect_space();
+    texpect_symbol(SYMBOL_OBRACKET);
+    texpect_number("1");
+    texpect_symbol(SYMBOL_COMMA);
+    texpect_space();
+    texpect_number("1");
+    texpect_symbol(SYMBOL_COMMA);
+    texpect_space();
+    texpect_number("2");
+    texpect_symbol(SYMBOL_COMMA);
+    texpect_space();
+    texpect_number("3");
+    texpect_symbol(SYMBOL_COMMA);
+    texpect_space();
+    texpect_number("5");
+    texpect_symbol(SYMBOL_COMMA);
+    texpect_space();
+    texpect_number("8");
+    texpect_symbol(SYMBOL_CBRACKET);
+    texpect_code_end();
+    texpect_text("\n    Double ");
+    texpect_code_start();
+    texpect_identifier("fib");
+    texpect_code_end();
+    texpect_text(": ");
+    texpect_code_start();
+    texpect_identifier("double");
+    texpect_symbol(SYMBOL_OPAREN);
+    texpect_identifier("fib");
+    texpect_symbol(SYMBOL_CPAREN);
+    texpect_code_end();
+    texpect_text("\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_ENDFOR);
+    texpect_code_end();
+    texpect_text("\n");
+    texpect_code_start();
+    texpect_keyword(KEYWORD_INCLUDE);
+    texpect_space();
+    texpect_string("/srv/http/templates/footer.txt");
+    texpect_code_end();
+    texpect_text("\nLast little bit down here\n");
 }
 
 /* vi: set et ts=4 sw=4: */

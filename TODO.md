@@ -1,35 +1,12 @@
 # To Do
 
-- Tokenizer:
-  - Basic tokens:
-    - text blocks
-    - numbers
-    - strings
-    - symbols
-    - keywords
-    - words
-    - whitespace
-  - There's really no need for the extra RAW token type, just chop off the tags
-    and count them as TEXT
-  - There's no need for coalescing either, there can just be multiple TEXT
-    nodes
+- Really the only supported whitespace is a space, so move to that
 
-- Lexer:
-  - Code tokens:
-    - text blocks
-    - numbers
-    - strings
-    - keywords,
-    - identifier lookups
-    - function lookups
-    - index operations
-    - operators
+- Start parser
+  - Parse code tokens into an AST
+    - reducing expressions
 
-- Parser:
-  - parses code tokens into an AST
-  - reducing expressions
-
-- Template:
+- Start template:
   - Accepts data or a file name and passes it to a parser to get an AST
   - Accepts input and renders it through the AST
   - Will optionally use a cache for `include` statements

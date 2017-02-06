@@ -82,7 +82,6 @@ typedef enum {
     KEYWORD_ENDFOR,
     KEYWORD_RAW,
     KEYWORD_ENDRAW,
-    KEYWORD_RANGE,
     KEYWORD_MAX
 } Keyword;
 

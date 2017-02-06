@@ -1,6 +1,10 @@
 #ifndef PARSER_H__
 #define PARSER_H__
 
+enum {
+    PARSER_INVALID_SYNTAX = 1,
+};
+
 typedef struct {
     Lexer lexer;
     DecimalContext *ctx;

@@ -1,6 +1,17 @@
 #ifndef TOKENIZER_H__
 #define TOKENIZER_H__
 
+enum {
+    TOKENIZER_INVALID_SYNTAX = 1,
+    TOKENIZER_EOF,
+    TOKENIZER_UNEXPECTED_EOF,
+    TOKENIZER_INVALID_NUMBER_FORMAT,
+    TOKENIZER_HANGING_RAW,
+    TOKENIZER_UNKNOWN_TOKEN,
+    TOKENIZER_TOKEN_NOT_HANDLED,
+    TOKENIZER_INVALID_WHITESPACE,
+};
+
 typedef enum {
     TOKEN_UNKNOWN,
     TOKEN_TEXT,
@@ -9,7 +20,9 @@ typedef enum {
     TOKEN_SYMBOL,
     TOKEN_KEYWORD,
     TOKEN_IDENTIFIER,
-    TOKEN_WHITESPACE,
+    TOKEN_SPACE,
+    TOKEN_CODE_START,
+    TOKEN_CODE_END,
 } TokenType;
 
 typedef struct {
@@ -22,20 +35,8 @@ typedef struct {
         Symbol symbol;
         Keyword keyword;
         SSlice identifier;
-        Whitespace whitespace;
     } as;
 } Token;
-
-enum {
-    TOKENIZER_INVALID_SYNTAX = 1,
-    TOKENIZER_EOF,
-    TOKENIZER_UNEXPECTED_EOF,
-    TOKENIZER_INVALID_NUMBER_FORMAT,
-    TOKENIZER_HANGING_RAW,
-    TOKENIZER_UNKNOWN_TOKEN,
-    TOKENIZER_TOKEN_NOT_HANDLED,
-    TOKENIZER_INVALID_WHITESPACE,
-};
 
 typedef struct {
     SSlice *data;

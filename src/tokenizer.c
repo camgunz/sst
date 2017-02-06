@@ -152,10 +152,25 @@ void tokenizer_set_token_identifier(Tokenizer *tokenizer, SSlice *identifier) {
 }
 
 static inline
-void tokenizer_set_token_whitespace(Tokenizer *tokenizer, Whitespace ws) {
-    tokenizer->token.type = TOKEN_WHITESPACE;
+void tokenizer_set_token_space(Tokenizer *tokenizer) {
+    tokenizer->token.type = TOKEN_SPACE;
     tokenizer->token.location = tokenizer->data->data;
-    tokenizer->token.as.whitespace = ws;
+}
+
+static inline
+bool tokenizer_set_token_code_start(Tokenizer *tokenizer, Status *status) {
+    tokenizer->token.type = TOKEN_CODE_START;
+    tokenizer->token.location = tokenizer->data->data;
+
+    return tokenizer_skip_runes(tokenizer, 3, status);
+}
+
+static inline
+bool tokenizer_set_token_code_end(Tokenizer *tokenizer, Status *status) {
+    tokenizer->token.type = TOKEN_CODE_END;
+    tokenizer->token.location = tokenizer->data->data;
+
+    return tokenizer_skip_runes(tokenizer, 3, status);
 }
 
 static
@@ -508,47 +523,13 @@ bool tokenizer_handle_word(Tokenizer *tokenizer, Status *status) {
 static
 bool tokenizer_handle_whitespace(Tokenizer *tokenizer, rune r,
                                                        Status *status) {
-    rune next_r;
-    SSlice cursor;
-
     switch (r) {
         case ' ':
-            tokenizer_set_token_whitespace(tokenizer, WHITESPACE_SPACE);
-            break;
-        case '\t':
-            tokenizer_set_token_whitespace(tokenizer, WHITESPACE_TAB);
-            break;
-        case '\n':
-            tokenizer_set_token_whitespace(tokenizer, WHITESPACE_NEWLINE);
-            break;
-        case '\r':
-            sslice_copy(&cursor, tokenizer->data);
-            if (!sslice_skip_rune(&cursor, status)) {
-                return false;
-            }
-
-            if (!sslice_get_first_rune(&cursor, &next_r, status)) {
-                if (status_match(status, "sslice", SSLICE_EMPTY)) {
-                    return unexpected_eof(status);
-                }
-
-                return false;
-            }
-
-            if (next_r != '\n') {
-                return invalid_whitespace(status);
-            }
-
-            tokenizer_set_token_whitespace(tokenizer, WHITESPACE_NEWLINE);
-
-            if (!tokenizer_skip_rune(tokenizer, status)) {
-                return false;
-            }
+            tokenizer_set_token_space(tokenizer);
+            return tokenizer_skip_rune(tokenizer, status);
         default:
             return invalid_whitespace(status);
     }
-
-    return tokenizer_skip_rune(tokenizer, status);
 }
 
 static
@@ -612,15 +593,12 @@ bool tokenizer_load_next(Tokenizer *tokenizer, Status *status) {
             return invalid_syntax(status);
         }
 
-        if (!sslice_starts_with_cstr(tokenizer->data, " }}")) {
-            return tokenizer_load_next_code_token(tokenizer, status);
+        if (sslice_starts_with_cstr(tokenizer->data, " }}")) {
+            tokenizer->in_code = false;
+            return tokenizer_set_token_code_end(tokenizer, status);
         }
 
-        if (!tokenizer_skip_runes(tokenizer, 3, status)) {
-            return false;
-        }
-
-        tokenizer->in_code = false;
+        return tokenizer_load_next_code_token(tokenizer, status);
     }
 
     if (sslice_empty(tokenizer->data)) {
@@ -644,12 +622,8 @@ bool tokenizer_load_next(Tokenizer *tokenizer, Status *status) {
             return tokenizer_handle_raw(tokenizer, status);
         }
 
-        if (!tokenizer_skip_runes(tokenizer, 3, status)) {
-            return false;
-        }
-
         tokenizer->in_code = true;
-        return tokenizer_load_next_code_token(tokenizer, status);
+        return tokenizer_set_token_code_start(tokenizer, status);
     }
 
     if (!status_match(status, "base", ERROR_NOT_FOUND)) {
