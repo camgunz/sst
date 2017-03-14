@@ -53,7 +53,7 @@ bool value_init_number_from_sslice(Value *value, SSlice *ss,
                                                  Status *status);
 bool value_init_string_from_sslice(Value *value, SSlice *ss, Status *status);
 void value_clear(Value *value);
-bool value_set_boolean(Value *value, bool b, Status *status);
+void value_set_boolean(Value *value, bool b);
 bool value_set_number(Value *value, Decimal *n, Status *status);
 bool value_set_string(Value *value, String *s, Status *status);
 bool value_set_array(Value *value, PArray *parray, Status *status);

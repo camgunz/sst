@@ -72,17 +72,17 @@ bool expression_parser_convert_to_rpn(ExpressionParser *expression_parser,
     PArray *output = &expression_parser->output;
 
     parray_clear(operators);
+    if (!parray_ensure_capacity(operators, code_tokens->len, status)) {
+        return false;
+    }
+
     parray_clear(output);
+    if (!parray_ensure_capacity(output, code_tokens->len, status)) {
+        return false;
+    }
 
     for (size_t i = 0; i < code_tokens->len; i++) {
         CodeToken *code_token = array_index_fast(code_tokens, i);
-        char *s = NULL;
-
-        if (!code_token_to_cstr(code_token, &s, status)) {
-            return false;
-        }
-
-        free(s);
 
         if ((code_token->type == CODE_TOKEN_NUMBER) ||
             (code_token->type == CODE_TOKEN_STRING)) {
@@ -264,16 +264,19 @@ bool expression_parser_convert_to_rpn(ExpressionParser *expression_parser,
                     operators->len - 1
                 );
 
-                if ((op->type == CODE_TOKEN_LOOKUP) ||
-                    (op->type == CODE_TOKEN_FUNCTION_START) ||
-                    (op->type == CODE_TOKEN_INDEX_START) ||
-                    (op->type == CODE_TOKEN_ARRAY_START)) {
-
+                if (op->type == CODE_TOKEN_LOOKUP) {
                     if (!parray_append(output, op, status)) {
                         return false;
                     }
 
                     parray_truncate_fast(operators, operators->len - 1);
+
+                    break;
+                }
+
+                if ((op->type == CODE_TOKEN_FUNCTION_START) ||
+                    (op->type == CODE_TOKEN_INDEX_START) ||
+                    (op->type == CODE_TOKEN_ARRAY_START)) {
 
                     break;
                 }
@@ -369,6 +372,12 @@ void expression_parser_clear(ExpressionParser *expression_parser) {
     array_clear(&expression_parser->code_tokens);
     parray_clear(&expression_parser->operators);
     parray_clear(&expression_parser->output);
+}
+
+void expression_parser_free(ExpressionParser *expression_parser) {
+    array_free(&expression_parser->code_tokens);
+    parray_free(&expression_parser->operators);
+    parray_free(&expression_parser->output);
 }
 
 /* vi: set et ts=4 sw=4: */

@@ -8,8 +8,6 @@
 #define NUMBER5       "23489234902342323419041892349034189341.796"
 #define NUMBER6       "23489234902342323419041892349034189341.79"
 
-#define EXPR "{{ 3 + 4 * 2 / (1 - 5) ^ 2 ^ 3 }}"
-
 #define TEMPLATE \
 "{{ include '/srv/http/templates/header.txt' }}\n"                          \
 "\n"                                                                        \

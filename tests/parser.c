@@ -13,6 +13,96 @@
 
 #include "data.h"
 
+#define NO_ALLOC 1
+
+void print_text_node(ASTNode *node) {
+#if NO_ALLOC
+    (void)node;
+    puts("<Text>");
+#else
+    char *cs = sslice_to_cstr(&node->as.text);
+
+    printf("<Text: [%s]>\n", cs);
+    free(cs);
+#endif
+}
+
+void print_include_node(ASTNode *node) {
+#if NO_ALLOC
+    (void)node;
+    puts("<Include>");
+#else
+    char *cs = sslice_to_cstr(&node->as.include);
+
+    printf("<Include: [%s]>\n", cs);
+    free(cs);
+#endif
+}
+
+bool print_expression(ExpressionParser *expression_parser, Status *status) {
+#if NO_ALLOC
+    (void)expression_parser;
+    (void)status;
+    puts("<Expression>");
+#else
+    char *es = NULL;
+
+    if (!expression_to_cstr(&expression_parser->output, &es, status)) {
+        return false;
+    }
+
+    printf("<Expression: [%s]>\n", es);
+    free(es);
+#endif
+
+    return status_ok(status);
+}
+
+bool print_conditional_node(ExpressionParser *expression_parser,
+                            Status *status) {
+#if NO_ALLOC
+    (void)expression_parser;
+    (void)status;
+    puts("<Conditional>");
+#else
+    char *es = NULL;
+
+    if (!expression_to_cstr(&expression_parser->output, &es, status)) {
+        return false;
+    }
+
+    printf("<Conditional (if): [%s]>\n", es);
+    free(es);
+#endif
+
+    return status_ok(status);
+}
+
+bool print_iteration_node(ASTNode *node, ExpressionParser *expression_parser,
+                                         Status *status) {
+#if NO_ALLOC
+    (void)node;
+    (void)expression_parser;
+    (void)status;
+    puts("<Iteration>");
+#else
+    char *es = NULL;
+    char *cs = NULL;
+
+    cs = sslice_to_cstr(&node->as.iteration_identifier);
+
+    if (!expression_to_cstr(&expression_parser->output, &es, status)) {
+        return false;
+    }
+
+    printf("<Iteration: [%s in %s]\n", cs, es);
+    free(cs);
+    free(es);
+#endif
+
+    return status_ok(status);
+}
+
 void test_parser(void **state) {
     String s;
     SSlice ss;
@@ -29,37 +119,23 @@ void test_parser(void **state) {
     assert_true(parser_init(&parser, &ss, &status));
 
     while (parser_load_next(&parser, &status)) {
-        char *cs = NULL;
-        char *es = NULL;
-
         switch (parser.node.type) {
             case AST_NODE_TEXT:
-                cs = sslice_to_cstr(&parser.node.as.text);
-                printf("<Text: [%s]>\n", cs);
-                free(cs);
+                print_text_node(&parser.node);
                 break;
             case AST_NODE_INCLUDE:
-                cs = sslice_to_cstr(&parser.node.as.include);
-                printf("<Include: [%s]>\n", cs);
-                free(cs);
+                print_include_node(&parser.node);
                 break;
             case AST_NODE_EXPRESSION:
-                assert_true(expression_to_cstr(
-                    &parser.expression_parser.output,
-                    &es,
-                    &status
-                ));
-                printf("<Expression: [%s]>\n", es);
-                free(es);
+                if (!print_expression(&parser.expression_parser, &status)) {
+                    printf("Error: %s\n", status.message);
+                }
                 break;
             case AST_NODE_CONDITIONAL:
-                assert_true(expression_to_cstr(
-                    &parser.expression_parser.output,
-                    &es,
-                    &status
-                ));
-                printf("<Conditional (if): [%s]>\n", es);
-                free(es);
+                if (!print_conditional_node(&parser.expression_parser,
+                                            &status)) {
+                    printf("Error: %s\n", status.message);
+                }
                 break;
             case AST_NODE_ELSE:
                 puts("<Conditional (else)>");
@@ -68,15 +144,11 @@ void test_parser(void **state) {
                 puts("<Conditional (end)>");
                 break;
             case AST_NODE_ITERATION:
-                cs = sslice_to_cstr(&parser.node.as.iteration_identifier);
-                assert_true(expression_to_cstr(
-                    &parser.expression_parser.output,
-                    &es,
-                    &status
-                ));
-                printf("<Iteration: [%s in %s]\n", cs, es);
-                free(cs);
-                free(es);
+                if (!print_iteration_node(&parser.node,
+                                          &parser.expression_parser,
+                                          &status)) {
+                    printf("Error: %s\n", status.message);
+                }
                 break;
             case AST_NODE_BREAK:
                 puts("<Break>");
@@ -93,7 +165,7 @@ void test_parser(void **state) {
         }
     }
 
-    if (!status_is_ok(&status)) {
+    if (!status_match(&status, "parser", PARSER_EOF)) {
         printf("Error in [%s] (%zu: %zu) [file %s, line %d]: %s\n",
             status.domain,
             parser.lexer.tokenizer.line,
@@ -104,9 +176,11 @@ void test_parser(void **state) {
         );
     }
 
-    assert_true(status_is_ok(&status));
+    assert_true(status_match(&status, "parser", PARSER_EOF));
 
     parser_free(&parser);
+    string_free(&s);
+
 }
 
 /* vi: set et ts=4 sw=4: */

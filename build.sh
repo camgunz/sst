@@ -4,6 +4,7 @@ set -e
 
 BUILD_DIR='cbuild'
 BUILD_TYPE='Debug'
+# BUILD_TYPE='Release'
 CBASE_DIR="${HOME}/local"
 CBASE_INCLUDE_DIR="${CBASE_DIR}/include"
 CBASE_LIBRARIES="${CBASE_DIR}/lib/libcbase.so"

@@ -22,6 +22,7 @@ bool expression_parser_convert_to_rpn(ExpressionParser *expression_parser,
 bool expression_parser_init(ExpressionParser *expression_parser,
                             Status *status);
 void expression_parser_clear(ExpressionParser *expression_parser);
+void expression_parser_free(ExpressionParser *expression_parser);
 
 #endif
 

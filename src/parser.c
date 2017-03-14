@@ -148,6 +148,13 @@
     "Unknown keyword"                           \
 )
 
+#define eof(status) status_failure( \
+    status,                         \
+    "parser",                       \
+    PARSER_EOF,                     \
+    "EOF"                           \
+)
+
 static
 bool parser_parse_expression(Parser *parser, Status *status) {
     /*
@@ -421,9 +428,7 @@ void parser_clear(Parser *parser) {
 void parser_free(Parser *parser) {
     lexer_free(&parser->lexer);
 
-    array_free(&parser->expression_parser.code_tokens);
-    parray_free(&parser->expression_parser.operators);
-    parray_free(&parser->expression_parser.output);
+    expression_parser_free(&parser->expression_parser);
 
     parser->already_loaded_next = false;
     parser->conditional_depth = 0;
@@ -431,9 +436,13 @@ void parser_free(Parser *parser) {
 }
 
 bool parser_load_next(Parser *parser, Status *status) {
-    if (!lexer_load_next(&parser->lexer, status)) {
-        return false;
+    if (!parser->already_loaded_next) {
+        if (!lexer_load_next(&parser->lexer, status)) {
+            return eof(status);
+        }
     }
+
+    parser->already_loaded_next = false;
 
     switch (parser->lexer.code_token.type) {
         case CODE_TOKEN_KEYWORD:

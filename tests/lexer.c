@@ -196,6 +196,10 @@ void test_lexer(void **state) {
     lexpect_keyword(KEYWORD_INCLUDE);
     lexpect_string("/srv/http/templates/footer.txt");
     lexpect_text("\n\nLast little bit down here\n");
+
+    lexer_free(&lexer);
+
+    string_free(&s);
 }
 
 /* vi: set et ts=4 sw=4: */

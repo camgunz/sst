@@ -64,13 +64,14 @@ static bool key_equal(const void *key1, const void *key2) {
 }
 
 void value_init_boolean(Value *value, bool b) {
-    value_set_type(value, VALUE_BOOLEAN);
+    value->type = VALUE_BOOLEAN;
     value->as.boolean = b;
 }
 
 bool value_init_number(Value *value, const char *num, DecimalContext *ctx,
                                                       Status *status) {
-    value_set_type(value, VALUE_NUMBER);
+    value->type = VALUE_NUMBER;
+
     return decimal_init_cstr(
         &value->as.number,
         num,
@@ -81,18 +82,18 @@ bool value_init_number(Value *value, const char *num, DecimalContext *ctx,
 }
 
 bool value_init_string(Value *value, const char *string, Status *status) {
-    value_set_type(value, VALUE_STRING);
+    value->type = VALUE_STRING;
 
     return string_init(&value->as.string, string, status);
 }
 
 void value_init_array(Value *value) {
-    value_set_type(value, VALUE_ARRAY);
+    value->type = VALUE_ARRAY;
     parray_init(&value->as.array);
 }
 
 bool value_init_table(Value *value, Status *status) {
-    value_set_type(value, VALUE_TABLE);
+    value->type = VALUE_TABLE;
 
     return table_init(
         &value->as.table,
@@ -164,6 +165,50 @@ void value_clear(Value *value) {
         default:
             break;
     }
+}
+
+void value_set_boolean(Value *value, bool b) {
+    if (value->type != VALUE_BOOLEAN) {
+        value_free(value);
+    }
+
+    value_init_boolean(value, b);
+}
+
+bool value_set_number(Value *value, Decimal *n, Status *status) {
+    if (value->type != VALUE_NUMBER) {
+        value_free(value);
+    }
+
+    return decimal_copy(&value->as.number, n, status);
+}
+
+bool value_set_string(Value *value, String *s, Status *status) {
+    if (value->type != VALUE_STRING) {
+        value_free(value);
+    }
+
+    return value_init_string(value, s->data, status);
+}
+
+bool value_set_array(Value *value, PArray *parray, Status *status) {
+    if (value->type != VALUE_ARRAY) {
+        value_free(value);
+    }
+
+    value_init_array(value);
+
+    return parray_copy(&value->as.array, parray, status);
+}
+
+bool value_set_table(Value *value, Table *table, Status *status) {
+    value_set_type(value, VALUE_TABLE);
+
+    if (!value_init_table(value, status)) {
+        return false;
+    }
+
+    return table_copy(&value->as.table, table, status);
 }
 
 bool value_index(Value *value, size_t index, Value **element, Status *status) {
@@ -327,7 +372,7 @@ bool value_equal(Value *result, Value *op1, Value *op2, Status *status) {
         result->as.boolean = op1->as.boolean == op2->as.boolean;
     }
     else if ((op1->type == VALUE_NUMBER) && (op2->type == VALUE_NUMBER)) {
-        int cmp_res;
+        int cmp_res = 0;
 
         if (!decimal_cmp(&op1->as.number, &op2->as.number, &cmp_res, status)) {
             return false;

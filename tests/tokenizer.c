@@ -56,13 +56,10 @@ void test_tokenizer(void **state) {
     SSlice ss;
     Tokenizer tokenizer;
     Status status;
-    String buf;
 
     (void)state;
 
     status_init(&status);
-
-    assert_true(string_init(&buf, "", &status));
 
     assert_true(string_init(&s, TEMPLATE, &status));
     assert_true(string_slice(&s, 0, s.len, &ss, &status));
@@ -275,6 +272,8 @@ void test_tokenizer(void **state) {
     texpect_string("/srv/http/templates/footer.txt");
     texpect_code_end();
     texpect_text("\n\nLast little bit down here\n");
+
+    string_free(&s);
 }
 
 /* vi: set et ts=4 sw=4: */
