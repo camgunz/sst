@@ -598,7 +598,15 @@ bool tokenizer_load_next(Tokenizer *tokenizer, Status *status) {
             return tokenizer_set_token_code_end(tokenizer, status);
         }
 
-        return tokenizer_load_next_code_token(tokenizer, status);
+        if (!tokenizer_load_next_code_token(tokenizer, status)) {
+            if (status_match(status, "base", ERROR_NOT_FOUND)) {
+                return eof(status);
+            }
+
+            return false;
+        }
+
+        return status_ok(status);
     }
 
     if (sslice_empty(tokenizer->data)) {
@@ -630,7 +638,11 @@ bool tokenizer_load_next(Tokenizer *tokenizer, Status *status) {
         return false;
     }
 
+    status_init(status);
+
     tokenizer_set_token_text(tokenizer, tokenizer->data);
+
+    sslice_seek_to_end(tokenizer->data);
 
     return status_ok(status);
 }

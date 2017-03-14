@@ -15,6 +15,7 @@ enum {
     LEXER_EXPECTED_SPACE_OR_CLOSE_PAREN,
     LEXER_EXPECTED_SPACE_OR_CLOSE_BRACKET,
     LEXER_EXPECTED_SPACE_OR_EXPRESSION_END, 
+    LEXER_EOF,
 };
 
 typedef enum {
@@ -79,10 +80,14 @@ typedef struct {
 
 bool lexer_init(Lexer *lexer, SSlice *data, Status *status);
 void lexer_clear(Lexer *lexer);
+void lexer_free(Lexer *lexer);
 void lexer_set_data(Lexer *lexer, SSlice *data);
 bool lexer_load_next(Lexer *lexer, Status *status);
 bool lexer_get_previous_token(Lexer *lexer, Token **token, Status *status);
 bool lexer_get_current_token(Lexer *lexer, Token **token, Status *status);
+
+bool code_token_to_string(CodeToken *code_token, String *str, Status *status);
+bool code_token_to_cstr(CodeToken *code_token, char **str, Status *status);
 
 #endif
 

@@ -40,15 +40,15 @@ typedef enum {
 typedef enum {
     OP_OPAREN,
     OP_CPAREN,
-    OP_BOOL_AND,
     OP_BOOL_OR,
-    OP_BOOL_EQUAL,
-    OP_BOOL_NOT_EQUAL,
-    OP_BOOL_GREATER_THAN,
-    OP_BOOL_GREATER_THAN_OR_EQUAL,
+    OP_BOOL_AND,
+    OP_BOOL_NOT,
     OP_BOOL_LESS_THAN,
     OP_BOOL_LESS_THAN_OR_EQUAL,
-    OP_BOOL_NOT,
+    OP_BOOL_GREATER_THAN,
+    OP_BOOL_GREATER_THAN_OR_EQUAL,
+    OP_BOOL_NOT_EQUAL,
+    OP_BOOL_EQUAL,
     OP_MATH_ADD,
     OP_MATH_SUBTRACT,
     OP_MATH_MULTIPLY,
@@ -73,12 +73,12 @@ typedef enum {
 typedef enum {
     KEYWORD_INCLUDE,
     KEYWORD_IF,
-    KEYWORD_ELIF,
     KEYWORD_ELSE,
     KEYWORD_ENDIF,
     KEYWORD_FOR,
     KEYWORD_IN,
     KEYWORD_BREAK,
+    KEYWORD_CONTINUE,
     KEYWORD_ENDFOR,
     KEYWORD_RAW,
     KEYWORD_ENDRAW,
@@ -94,8 +94,10 @@ typedef enum {
 } OperatorAssociativity;
 
 typedef struct {
+    const char *value;
     OperatorAssociativity assoc;
     unsigned char prec;
+    unsigned char arity;
 } OperatorInformation;
 
 extern OperatorInformation OperatorInfo[OP_MAX];

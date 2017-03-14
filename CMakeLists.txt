@@ -115,6 +115,7 @@ SET(LIBSST_SOURCE_FILES
   ${CMAKE_SOURCE_DIR}/src/tokenizer.c
   ${CMAKE_SOURCE_DIR}/src/lexer.c
   ${CMAKE_SOURCE_DIR}/src/parser.c
+  ${CMAKE_SOURCE_DIR}/src/expression_parser.c
 )
 
 SET(LIBSST_LIBRARIES

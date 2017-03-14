@@ -2,8 +2,10 @@
 
 #include "config.h"
 #include "lang.h"
+#include "value.h"
 #include "tokenizer.h"
 #include "lexer.h"
+#include "expression_parser.h"
 #include "parser.h"
 
 #define invalid_syntax(status) status_failure( \
@@ -16,271 +18,392 @@
 #define invalid_literal_value_type(status) status_failure( \
     status,                                                \
     "parser",                                              \
-    PARSER_INVALID_LITERAL_VALUE_TYPE                      \
+    PARSER_INVALID_LITERAL_VALUE_TYPE,                     \
     "Invalid literal value type"                           \
 )
 
-static inline
-bool parser_push_literal(Parser *parser, ValueType type, Status *status) {
-    ExpressionNode *node = NULL;
+#define unexpected_comma(status) status_failure( \
+    status,                                      \
+    "parser",                                    \
+    PARSER_UNEXPECTED_COMMA,                     \
+    "Unexpected comma"                           \
+)
 
-    if (!array_append(&parser->expression_queue, (void **)&node, status)) {
-        return false;
-    }
+#define unexpected_keyword_in(status) status_failure( \
+    status,                                           \
+    "parser",                                         \
+    PARSER_UNEXPECTED_KEYWORD_IN,                     \
+    "Unexpected \"in\" keyword"                       \
+)
 
-    node->type = EXPRESSION_NODE_LITERAL;
+#define unmatched_parenthesis(status) status_failure( \
+    status,                                           \
+    "parser",                                         \
+    PARSER_UNMATCHED_PARENTHESIS,                     \
+    "Unmatched parenthesis"                           \
+)
 
-    switch (type) {
-        case VALUE_NUMBER:
-            return value_init_number_from_sslice(
-                &node->as.literal,
-                &parser->lexer.code_token.as.number
-            );
-        case VALUE_STRING:
-            return value_init_string_from_sslice(
-                &node->as.literal,
-                &parser->lexer.code_token.as.string
-            );
-        default:
-            return invalid_literal_value_type(status);
-    }
-}
+#define unmatched_function_end(status) status_failure( \
+    status,                                            \
+    "parser",                                          \
+    PARSER_UNMATCHED_FUNCTION_END,                     \
+    "Unmatched function end"                           \
+)
 
-static inline
-bool parser_push_lookup(Parser *parser, Status *status) {
-    ExpressionNode *node = NULL;
+#define unmatched_array_end(status) status_failure( \
+    status,                                         \
+    "parser",                                       \
+    PARSER_UNMATCHED_ARRAY_END,                     \
+    "Unmatched array end"                           \
+)
 
-    if (!array_append(&parser->operator_stack, (void **)&node, status)) {
-        return false;
-    }
+#define unmatched_index_end(status) status_failure( \
+    status,                                         \
+    "parser",                                       \
+    PARSER_UNMATCHED_INDEX_END,                     \
+    "Unmatched index end"                           \
+)
 
-    node->type = EXPRESSION_NODE_LOOKUP;
-    sslice_copy(&node->as.lookup, &parser->lexer.code_token.as.lookup);
-}
+#define expected_expression(status) status_failure( \
+    status,                                         \
+    "parser",                                       \
+    PARSER_EXPECTED_STRING,                         \
+    "Expected expression"                           \
+)
 
-static inline
-bool parser_push_function_call(Parser *parser, Status *status) {
-    ExpressionNode *node = NULL;
+#define expected_string(status) status_failure( \
+    status,                                     \
+    "parser",                                   \
+    PARSER_EXPECTED_STRING,                     \
+    "Expected string"                           \
+)
 
-    if (!array_append(&parser->operator_stack, (void **)&node, status)) {
-        return false;
-    }
+#define expected_identifier(status) status_failure( \
+    status,                                         \
+    "parser",                                       \
+    PARSER_EXPECTED_IDENTIFIER,                     \
+    "Expected identifier"                           \
+)
 
-    node->type = EXPRESSION_NODE_FUNCTION_CALL;
-    sslice_copy(&node->as.function, &parser->lexer.code_token.as.function);
-}
+#define expected_keyword_in(status) status_failure( \
+    status,                                         \
+    "parser",                                       \
+    PARSER_EXPECTED_KEYWORD_IN,                     \
+    "Expected \"in\" keyword"                       \
+)
 
-static inline
-bool parser_push_index(Parser *parser, Status *status) {
-    ExpressionNode *node = NULL;
+#define expected_operator(status) status_failure( \
+    status,                                       \
+    "parser",                                     \
+    PARSER_EXPECTED_OPERATOR,                     \
+    "Expected operator"                           \
+)
 
-    if (!array_append(&parser->operator_stack, (void **)&node, status)) {
-        return false;
-    }
+#define else_without_if(status) status_failure( \
+    status,                                     \
+    "parser",                                   \
+    PARSER_ELSE_WITHOUT_IF,                     \
+    "\"else\" without \"if\""                   \
+)
 
-    node->type = EXPRESSION_NODE_INDEX;
-    sslice_copy(&node->as.index, &parser->lexer.code_token.as.index);
-}
+#define endif_without_if(status) status_failure( \
+    status,                                      \
+    "parser",                                    \
+    PARSER_ENDIF_WITHOUT_IF,                     \
+    "\"endif\" without \"if\""                   \
+)
 
-static inline
-bool parser_push_array(Parser *parser, Status *status) {
-    ExpressionNode *node = NULL;
+#define break_without_for(status) status_failure( \
+    status,                                       \
+    "parser",                                     \
+    PARSER_BREAK_WITHOUT_FOR,                     \
+    "\"break\" without \"for\""                   \
+)
 
-    if (!array_append(&parser->operator_stack, (void **)&node, status)) {
-        return false;
-    }
+#define continue_without_for(status) status_failure( \
+    status,                                          \
+    "parser",                                        \
+    PARSER_CONTINUE_WITHOUT_FOR,                     \
+    "\"continue\" without \"for\""                   \
+)
 
-    node->type = EXPRESSION_NODE_ARRAY;
-}
+#define endfor_without_for(status) status_failure( \
+    status,                                        \
+    "parser",                                      \
+    PARSER_ENDFOR_WITHOUT_FOR,                     \
+    "\"endfor\" without \"for\""                   \
+)
 
-static inline
-bool parser_push_operator(Parser *parser, Operator op, Status *status) {
-    ExpressionNode *node = NULL;
+#define extraneous_parentheses(status) status_failure( \
+    status,                                            \
+    "parser",                                          \
+    PARSER_EXTRANEOUS_PARENTHESES,                     \
+    "Extraneous parentheses"                           \
+)
 
-    if (!array_append(&parser->operator_stack, (void **)&node, status)) {
-        return false;
-    }
-
-    node->type = EXPRESSION_NODE_OPERATOR;
-    node->as.op = op;
-
-    return status_ok(status);
-}
-
-static
-bool parser_parse_keyword(Parser *parser, Status *status) {
-    (void)parser;
-    (void)status;
-
-    return status_ok(status);
-}
-
-static
-bool parser_parse_text(Parser *parser, Status *status) {
-    (void)parser;
-    (void)status;
-
-    return status_ok(status);
-}
+#define unknown_keyword(status) status_failure( \
+    status,                                     \
+    "parser",                                   \
+    PARSER_UNKNOWN_KEYWORD,                     \
+    "Unknown keyword"                           \
+)
 
 static
 bool parser_parse_expression(Parser *parser, Status *status) {
-    ExpressionNode *node = NULL;
+    /*
+     * This just runs shunting yard.  We need function arity information to go
+     * any further (fold an expression, generate instructions like LOAD, EVAL,
+     * whatever).  Folding and type checking has to happen during compilation,
+     * where functions must be available.
+     */
+
+    Array *code_tokens = &parser->expression_parser.code_tokens;
+
+    array_clear(code_tokens);
 
     while (true) {
+        CodeToken *code_token = NULL;
+
         switch (parser->lexer.code_token.type) {
             case CODE_TOKEN_KEYWORD:
             case CODE_TOKEN_TEXT:
-                parser->already_loaded_next = true;
-                break;
-            case CODE_TOKEN_NUMBER:
-                if (!parser_push_literal(parser, VALUE_NUMBER, status)) {
-                    return false;
-                }
-                break;
-            case CODE_TOKEN_STRING:
-                if (!parser_push_literal(parser, VALUE_STRING, status)) {
-                    return false;
-                }
-                break;
-            case CODE_TOKEN_LOOKUP:
-                if (!parser_push_lookup(parser, status)) {
-                    return false;
-                }
-                break;
-            case CODE_TOKEN_FUNCTION_START:
-                if (!parser_push_function_call(parser, status)) {
-                    return false;
-                }
-                break;
-            case CODE_TOKEN_INDEX_END:
-                do { /* I mean to go one past the last LITERAL here */
-                    if (!array_append(&parser->expression_queue,
-                                      (void **)&node,
-                                      status)) {
-                        return false;
-                    }
-
-                    if (!array_pop_right(&parser->operator_stack,
-                                         (void **)&node;
-                                         status)) {
-                        return false;
-                    }
-                } while (node->type == EXPRESSION_NODE_LITERAL);
-                break;
-            case CODE_TOKEN_OPERATOR:
-                switch (parser->lexer.code_token.as.op) {
-                    case OP_OPAREN:
-                        if (!parser_push_operator(parser, OP_OPAREN, status)) {
-                            return false;
-                        }
-                        break;
-                    case OP_CPAREN:
-                        do { /* I mean to go one past the last LITERAL here */
-                            if (!array_append(&parser->expression_queue,
-                                              (void **)&node,
-                                              status)) {
-                                return false;
-                            }
-
-                            if (!array_pop_right(&parser->operator_stack,
-                                                 (void **)&node;
-                                                 status)) {
-                                return false;
-                            }
-                        } while (node->type == EXPRESSION_NODE_LITERAL);
-                        break;
-                    default:
-                        while (parser->operator_stack.len > 0) {
-                            if (!array_index(&parser->operator_stack,
-                                             parser->operator_stack.len - 1,
-                                             (void **)&node,
-                                             status)) {
-                                return false;
-                            }
-
-                            if (node->type != EXPRESSION_NODE_OPERATOR) {
-                                break;
-                            }
-
-                            OperatorInfo *op1 = &OperatorInfo[op];
-                            OperatorInfo *op2 = &OperatorInfo[node->as.op];
-
-                            if (((op1->assoc == OP_ASSOC_LEFT) &&
-                                 (op1->prec <= op2->prec)) ||
-                                ((op1->assoc == OP_ASSOC_RIGHT) &&
-                                 (op1->prec < op2->prec))) {
-                                ExpressionNode *node2 = NULL;
-
-                                if (!array_append(&parser->operator_stack,
-                                                  (void **)&node2,
-                                                  status)) {
-                                    return false;
-                                }
-
-                                if (!array_pop_right(&parser->expression_queue,
-                                                     (void **)&node2;
-                                                     status)) {
-                                    return false;
-                                }
-                            }
-                        }
-                        break;
-                }
-                break;
-            case CODE_TOKEN_FUNCTION_ARGUMENT_END:
-                if (!array_index(&parser->operator_stack,
-                                 parser->operator_stack.len - 1,
-                                 (void **)&node,
-                                 status)) {
-                    return false;
-                }
-                while (node->type != EXPRESSION_NODE_FUNCTION_CALL) {
-                    ExpressionNode *node2 = NULL;
-
-                    if (!array_append(&parser->expression_queue,
-                                      (void **)&node2,
-                                      status)) {
-                        return false;
-                    }
-
-                    if (!array_pop_right(&parser->operator_stack,
-                                         (void **)&node2;
-                                         status)) {
-                        return false;
-                    }
-                }
-                break;
-            case CODE_TOKEN_INDEX_START:
-                if (!parser_push_index(parser, status)) {
-                    return false;
-                }
-                break;
-            case CODE_TOKEN_ARRAY_START:
-                if (!parser_push_array(parser, status)) {
-                    return false;
-                }
-                break;
-            case CODE_TOKEN_OPERATOR:
-                if (!parser_push_operator(parser, status)) {
-                    return false;
-                }
+                goto tokens_gathered;
                 break;
             default:
                 break;
         }
+
+        if (!array_append(code_tokens, (void **)&code_token, status)) {
+            return false;
+        }
+
+        code_token->type = parser->lexer.code_token.type;
+
+        switch (parser->lexer.code_token.type) {
+            case CODE_TOKEN_TEXT:
+                sslice_copy(
+                    &code_token->as.text,
+                    &parser->lexer.code_token.as.text
+                );
+                break;
+            case CODE_TOKEN_NUMBER:
+                sslice_copy(
+                    &code_token->as.number,
+                    &parser->lexer.code_token.as.number
+                );
+                break;
+            case CODE_TOKEN_STRING:
+                sslice_copy(
+                    &code_token->as.string,
+                    &parser->lexer.code_token.as.string
+                );
+                break;
+            case CODE_TOKEN_KEYWORD:
+                code_token->as.keyword = parser->lexer.code_token.as.keyword;
+                break;
+            case CODE_TOKEN_LOOKUP:
+                sslice_copy(
+                    &code_token->as.lookup,
+                    &parser->lexer.code_token.as.lookup
+                );
+                break;
+            case CODE_TOKEN_FUNCTION_START:
+                sslice_copy(
+                    &code_token->as.function,
+                    &parser->lexer.code_token.as.function
+                );
+                break;
+            case CODE_TOKEN_INDEX_START:
+                sslice_copy(
+                    &code_token->as.index,
+                    &parser->lexer.code_token.as.index
+                );
+                break;
+            case CODE_TOKEN_OPERATOR:
+                code_token->as.op = parser->lexer.code_token.as.op;
+                break;
+            default:
+                break;
+        }
+
+        if (!lexer_load_next(&parser->lexer, status)) {
+            return false;
+        }
+
+        parser->already_loaded_next = true;
+    }
+
+tokens_gathered:
+
+    return expression_parser_convert_to_rpn(
+        &parser->expression_parser,
+        status
+    );
+}
+
+static
+bool parser_parse_keyword(Parser *parser, Status *status) {
+    SSlice iteration_identifier;
+
+    switch (parser->lexer.code_token.as.keyword) {
+        case KEYWORD_INCLUDE:
+            if (!lexer_load_next(&parser->lexer, status)) {
+                return false;
+            }
+
+            if (parser->lexer.code_token.type != CODE_TOKEN_STRING) {
+                return expected_string(status);
+            }
+
+            parser->node.type = AST_NODE_INCLUDE;
+
+            sslice_copy(
+                &parser->node.as.include,
+                &parser->lexer.code_token.as.string
+            );
+
+            break;
+        case KEYWORD_IF:
+            parser->conditional_depth++;
+
+            if (!lexer_load_next(&parser->lexer, status)) {
+                return false;
+            }
+
+            if ((parser->lexer.code_token.type != CODE_TOKEN_NUMBER) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_STRING) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_LOOKUP) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_FUNCTION_START) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_INDEX_START) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_ARRAY_START) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_OPERATOR)) {
+                return expected_expression(status);
+            }
+
+            if (!parser_parse_expression(parser, status)) {
+                return false;
+            }
+
+            parser->node.type = AST_NODE_CONDITIONAL;
+
+            break;
+        case KEYWORD_ELSE:
+            if (parser->conditional_depth == 0) {
+                return else_without_if(status);
+            }
+
+            parser->node.type = AST_NODE_ELSE;
+
+            break;
+        case KEYWORD_ENDIF:
+            if (parser->conditional_depth == 0) {
+                return endif_without_if(status);
+            }
+
+            parser->conditional_depth--;
+
+            parser->node.type = AST_NODE_CONDITIONAL_END;
+
+            break;
+        case KEYWORD_FOR:
+            parser->iteration_depth++;
+
+            /* expect lookup, KEYWORD_IN, expression */
+            if (!lexer_load_next(&parser->lexer, status)) {
+                return false;
+            }
+
+            if (parser->lexer.code_token.type != CODE_TOKEN_LOOKUP) {
+                return expected_identifier(status);
+            }
+
+            sslice_copy(
+                &iteration_identifier,
+                &parser->lexer.code_token.as.lookup
+            );
+
+            if (!lexer_load_next(&parser->lexer, status)) {
+                return false;
+            }
+
+            if ((parser->lexer.code_token.type != CODE_TOKEN_KEYWORD) ||
+                (parser->lexer.code_token.as.keyword != KEYWORD_IN)) {
+                return expected_keyword_in(status);
+            }
+
+            if (!lexer_load_next(&parser->lexer, status)) {
+                return false;
+            }
+
+            if ((parser->lexer.code_token.type != CODE_TOKEN_NUMBER) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_STRING) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_LOOKUP) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_FUNCTION_START) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_INDEX_START) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_ARRAY_START) &&
+                (parser->lexer.code_token.type != CODE_TOKEN_OPERATOR)) {
+                return expected_expression(status);
+            }
+
+            if (!parser_parse_expression(parser, status)) {
+                return false;
+            }
+
+            parser->node.type = AST_NODE_ITERATION;
+
+            sslice_copy(
+                &parser->node.as.iteration_identifier,
+                &iteration_identifier
+            );
+
+            break;
+        case KEYWORD_IN:
+            return unexpected_keyword_in(status);
+        case KEYWORD_BREAK:
+            if (parser->iteration_depth == 0) {
+                return break_without_for(status);
+            }
+
+            parser->node.type = AST_NODE_BREAK;
+
+            break;
+        case KEYWORD_CONTINUE:
+            if (parser->iteration_depth == 0) {
+                return continue_without_for(status);
+            }
+
+            parser->node.type = AST_NODE_CONTINUE;
+
+            break;
+        case KEYWORD_ENDFOR:
+            if (parser->iteration_depth == 0) {
+                return endfor_without_for(status);
+            }
+
+            parser->iteration_depth--;
+
+            parser->node.type = AST_NODE_ITERATION_END;
+
+            break;
+        default:
+            return unknown_keyword(status);
     }
 
     return status_ok(status);
 }
 
-bool parser_init(Parser *parser, SSlice *data, DecimalContext *ctx,
-                                               Status *status) {
+bool parser_init(Parser *parser, SSlice *data, Status *status) {
     if (!lexer_init(&parser->lexer, data, status)) {
         return false;
     }
 
-    parser->ctx = ctx;
+    if (!expression_parser_init(&parser->expression_parser, status)) {
+        return false;
+    }
+
+    parser->already_loaded_next = false;
+    parser->conditional_depth = 0;
+    parser->iteration_depth = 0;
 
     return status_ok(status);
 }
@@ -288,7 +411,23 @@ bool parser_init(Parser *parser, SSlice *data, DecimalContext *ctx,
 void parser_clear(Parser *parser) {
     lexer_clear(&parser->lexer);
 
-    parser->ctx = NULL;
+    expression_parser_clear(&parser->expression_parser);
+
+    parser->already_loaded_next = false;
+    parser->conditional_depth = 0;
+    parser->iteration_depth = 0;
+}
+
+void parser_free(Parser *parser) {
+    lexer_free(&parser->lexer);
+
+    array_free(&parser->expression_parser.code_tokens);
+    parray_free(&parser->expression_parser.operators);
+    parray_free(&parser->expression_parser.output);
+
+    parser->already_loaded_next = false;
+    parser->conditional_depth = 0;
+    parser->iteration_depth = 0;
 }
 
 bool parser_load_next(Parser *parser, Status *status) {
@@ -300,7 +439,14 @@ bool parser_load_next(Parser *parser, Status *status) {
         case CODE_TOKEN_KEYWORD:
             return parser_parse_keyword(parser, status);
         case CODE_TOKEN_TEXT:
-             return parser_parse_text(parser, status);
+            parser->node.type = AST_NODE_TEXT;
+
+            sslice_copy(
+                &parser->node.as.text,
+                &parser->lexer.code_token.as.text
+            );
+
+            return status_ok(status);
         case CODE_TOKEN_NUMBER:
         case CODE_TOKEN_STRING:
         case CODE_TOKEN_LOOKUP:
@@ -308,12 +454,54 @@ bool parser_load_next(Parser *parser, Status *status) {
         case CODE_TOKEN_INDEX_START:
         case CODE_TOKEN_ARRAY_START:
         case CODE_TOKEN_OPERATOR:
-            return parser_parse_expression(parser, status);
+            if (!parser_parse_expression(parser, status)) {
+                return false;
+            }
+
+            parser->node.type = AST_NODE_EXPRESSION;
+
+            return status_ok(status);
         default:
             break;
     }
 
     return invalid_syntax(status);
+}
+
+bool expression_to_string(PArray *expression, String *str, Status *status) {
+    for (size_t i = 0; i < expression->len; i++) {
+        CodeToken *code_token = parray_index_fast(expression, i);
+
+        if (i > 0) {
+            if (!string_append_cstr(str, ", ", status)) {
+                return false;
+            }
+        }
+
+        if (!code_token_to_string(code_token, str, status)) {
+            return false;
+        }
+    }
+
+    return status_ok(status);
+}
+
+bool expression_to_cstr(PArray *expression, char **str, Status *status) {
+    String s;
+
+    if (!string_init(&s, "", status)) {
+        return false;
+    }
+
+    if (!expression_to_string(expression, &s, status)) {
+        return false;
+    }
+
+    *str = strdup(s.data);
+
+    string_free(&s);
+
+    return status_ok(status);
 }
 
 /* vi: set et ts=4 sw=4: */

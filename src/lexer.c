@@ -103,6 +103,13 @@
     "Expected space or code end"                                 \
 )
 
+#define eof(status) status_failure( \
+    status,                         \
+    "lexer",                        \
+    LEXER_EOF,                      \
+    "EOF"                           \
+)
+
 static inline
 bool lexer_push_state(Lexer *lexer, LexerState state, Status *status) {
     LexerState *new_state = NULL;
@@ -276,6 +283,7 @@ bool lexer_handle_keyword_token(Lexer *lexer, Status *status) {
     lexer->code_token.location = lexer->tokenizer.token.location;
     lexer->code_token.as.keyword = lexer->tokenizer.token.as.keyword;
 
+    /* [TODO] Need to handle 'else if' here */
     return lexer_expect_space_or_expression_end(lexer, status);
 }
 
@@ -428,7 +436,7 @@ bool lexer_handle_symbol_token(Lexer *lexer, Status *status) {
             lexer_set_token_operator(lexer, OP_MATH_MULTIPLY);
             return lexer_expect_space(lexer, status);
         case SYMBOL_FORWARD_SLASH:
-            lexer_set_token_operator(lexer, OP_MATH_MULTIPLY);
+            lexer_set_token_operator(lexer, OP_MATH_DIVIDE);
             return lexer_expect_space(lexer, status);
         case SYMBOL_PERCENT:
             lexer_set_token_operator(lexer, OP_MATH_REMAINDER);
@@ -532,6 +540,14 @@ void lexer_clear(Lexer *lexer) {
     array_clear(&lexer->states);
 }
 
+void lexer_free(Lexer *lexer) {
+    tokenizer_clear(&lexer->tokenizer);
+    lexer->code_token.type = CODE_TOKEN_UNKNOWN;
+    lexer->code_token.location = NULL;
+    lexer->already_loaded_next = false;
+    array_free(&lexer->states);
+}
+
 void lexer_set_data(Lexer *lexer, SSlice *sslice) {
     tokenizer_init(&lexer->tokenizer, sslice);
     lexer->code_token.type = CODE_TOKEN_UNKNOWN;
@@ -559,6 +575,10 @@ bool lexer_load_next(Lexer *lexer, Status *status) {
     do {
         if (!lexer->already_loaded_next) {
             if (!tokenizer_load_next(&lexer->tokenizer, status)) {
+                if (status_match(status, "token", TOKENIZER_EOF)) {
+                    return eof(status);
+                }
+
                 return false;
             }
         }
@@ -591,6 +611,202 @@ bool lexer_load_next(Lexer *lexer, Status *status) {
     }
 
     return unexpected_token(status);
+}
+
+bool code_token_to_string(CodeToken *code_token, String *str, Status *status) {
+    switch (code_token->type) {
+        case CODE_TOKEN_UNKNOWN:
+            if (!string_assign(str, "<Unknown>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_TEXT:
+            if (!string_append_cstr(str, "<Text: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr_full(str, code_token->as.text.data,
+                                              code_token->as.text.len,
+                                              code_token->as.text.byte_len,
+                                              status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+
+            break;
+        case CODE_TOKEN_NUMBER:
+            if (!string_append_cstr(str, "<Number: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr_full(str,
+                                         code_token->as.number.data,
+                                         code_token->as.number.len,
+                                         code_token->as.number.byte_len,
+                                         status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+
+            break;
+        case CODE_TOKEN_STRING:
+            if (!string_append_cstr(str, "<String: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr_full(str,
+                                         code_token->as.string.data,
+                                         code_token->as.string.len,
+                                         code_token->as.string.byte_len,
+                                         status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+
+            break;
+        case CODE_TOKEN_KEYWORD:
+            if (!string_append_cstr(str, "<Keyword: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str,
+                                    KeywordValues[code_token->as.keyword],
+                                    status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_LOOKUP:
+            if (!string_append_cstr(str, "<Identifier: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr_full(str,
+                                         code_token->as.lookup.data,
+                                         code_token->as.lookup.len,
+                                         code_token->as.lookup.byte_len,
+                                         status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+
+            break;
+        case CODE_TOKEN_FUNCTION_START:
+            if (!string_append_cstr(str, "<Function: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr_full(str,
+                                         code_token->as.function.data,
+                                         code_token->as.function.len,
+                                         code_token->as.function.byte_len,
+                                         status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+
+            break;
+        case CODE_TOKEN_FUNCTION_END:
+            if (!string_assign(str, "<FunctionEnd>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_FUNCTION_ARGUMENT_END:
+            if (!string_assign(str, "<FunctionArgumentEnd>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_INDEX_START:
+            if (!string_append_cstr(str, "<Index: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr_full(str,
+                                         code_token->as.index.data,
+                                         code_token->as.index.len,
+                                         code_token->as.index.byte_len,
+                                         status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+
+            break;
+        case CODE_TOKEN_INDEX_END:
+            if (!string_assign(str, "<IndexEnd>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_ARRAY_START:
+            if (!string_assign(str, "<ArrayStart>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_ARRAY_END:
+            if (!string_assign(str, "<ArrayEnd>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_ARRAY_ELEMENT_END:
+            if (!string_assign(str, "<ArrayElementEnd>", status)) {
+                return false;
+            }
+            break;
+        case CODE_TOKEN_OPERATOR:
+            if (!string_append_cstr(str, "<Operator: [", status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str,
+                                    OperatorInfo[code_token->as.op].value,
+                                    status)) {
+                return false;
+            }
+
+            if (!string_append_cstr(str, "]>", status)) {
+                return false;
+            }
+            break;
+    }
+
+    return status_ok(status);
+}
+
+bool code_token_to_cstr(CodeToken *code_token, char **str, Status *status) {
+    String buf;
+
+    if (!string_init(&buf, "", status)) {
+        return false;
+    }
+
+    if (!code_token_to_string(code_token, &buf, status)) {
+        return false;
+    }
+
+    *str = strdup(buf.data);
+    string_free(&buf);
+
+    return status_ok(status);
 }
 
 /* vi: set et ts=4 sw=4: */

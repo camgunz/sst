@@ -42,7 +42,7 @@
     lexpect(CODE_TOKEN_FUNCTION_START); \
     assert_true(sslice_equals_cstr(&lexer.code_token.as.function, fstart))
 
-#define lexpect_function_end(lexer) \
+#define lexpect_function_end() \
     lexpect(CODE_TOKEN_FUNCTION_END)
 
 #define lexpect_function_argument_end(lexer) \
@@ -72,14 +72,11 @@ void test_lexer(void **state) {
     String s;
     SSlice ss;
     Status status;
-    String buf;
     Lexer lexer;
 
     (void)state;
 
     status_init(&status);
-
-    assert_true(string_init(&buf, "", &status));
 
     assert_true(string_init(&s, TEMPLATE, &status));
     assert_true(string_slice(&s, 0, s.len, &ss, &status));
@@ -92,7 +89,15 @@ void test_lexer(void **state) {
     lexpect_lookup("person.age");
     lexpect_operator(OP_BOOL_GREATER_THAN_OR_EQUAL);
     lexpect_number("18");
-    lexpect_text("\n...\n");
+    lexpect_text("\n    Don't forget to register to vote!\n");
+    lexpect_keyword(KEYWORD_ELSE);
+    lexpect_keyword(KEYWORD_IF);
+    lexpect_lookup("person.age");
+    lexpect_operator(OP_BOOL_GREATER_THAN_OR_EQUAL);
+    lexpect_number("14");
+    lexpect_text(
+        "\n    If you'll be 18 before election day, register to vote!\n"
+    );
     lexpect_keyword(KEYWORD_ENDIF);
     lexpect_text("\n\n");
     lexpect_keyword(KEYWORD_FOR);
@@ -109,14 +114,14 @@ void test_lexer(void **state) {
     lexpect_keyword(KEYWORD_ENDFOR);
     lexpect_text("\n\n");
     lexpect_text("\n    This is how you would use raw }} and {{ markers.\n");
-    lexpect_text("\n");
+    lexpect_text("\n\n");
     lexpect_keyword(KEYWORD_IF);
     lexpect_function_start("upper");
     lexpect_lookup("message");
-    lexpect_function_end(lexer);
+    lexpect_function_end();
     lexpect_operator(OP_BOOL_EQUAL);
     lexpect_string("OR PUT THEM IN STRINGS {{ }} }} {{");
-    lexpect_text("\nYou guessed the magic message!\n");
+    lexpect_text("\n    You guessed the magic message!\n");
     lexpect_keyword(KEYWORD_ENDIF);
     lexpect_text("\n\n");
     lexpect_keyword(KEYWORD_FOR);
@@ -131,22 +136,66 @@ void test_lexer(void **state) {
     lexpect_array_element_end(lexer);
     lexpect_number("3");
     lexpect_array_element_end(lexer);
+    lexpect_number("4");
+    lexpect_array_element_end(lexer);
     lexpect_number("5");
     lexpect_array_element_end(lexer);
-    lexpect_number("8");
+    lexpect_number("4");
+    lexpect_operator(OP_MATH_ADD);
+    lexpect_number("4");
+    lexpect_array_element_end(lexer);
+    lexpect_number("13");
+    lexpect_array_element_end(lexer);
+    lexpect_number("21");
+    lexpect_array_element_end(lexer);
+    lexpect_number("34");
     lexpect_array_end(lexer);
+    lexpect_text("\n    ");
+    lexpect_keyword(KEYWORD_IF);
+    lexpect_lookup("fib");
+    lexpect_operator(OP_BOOL_EQUAL);
+    lexpect_number("4");
+    lexpect_text("\n        ");
+    lexpect_keyword(KEYWORD_CONTINUE);
+    lexpect_text("\n    ");
+    lexpect_keyword(KEYWORD_ENDIF);
     lexpect_text("\n    Double ");
     lexpect_lookup("fib");
     lexpect_text(": ");
     lexpect_function_start("double");
     lexpect_lookup("fib");
-    lexpect_function_end(lexer);
+    lexpect_function_end();
+    lexpect_text("\n    (also ");
+    lexpect_index_start("fibs");
+    lexpect_function_start("min");
+    lexpect_number("8");
+    lexpect_function_argument_end();
+    lexpect_function_start("max");
+    lexpect_number("0");
+    lexpect_function_argument_end();
+    lexpect_lookup("fib");
+    lexpect_operator(OP_MATH_SUBTRACT);
+    lexpect_number("8");
+    lexpect_function_end();
+    lexpect_function_end();
+    lexpect_index_end();
+    lexpect_text(")\n    ");
+    lexpect_keyword(KEYWORD_IF);
+    lexpect_lookup("fib");
+    lexpect_operator(OP_BOOL_GREATER_THAN_OR_EQUAL);
+    lexpect_number("10");
+    lexpect_text("\n        Whew fibs got too big: ");
+    lexpect_lookup("fib");
+    lexpect_text("\n        ");
+    lexpect_keyword(KEYWORD_BREAK);
+    lexpect_text("\n    ");
+    lexpect_keyword(KEYWORD_ENDIF);
     lexpect_text("\n");
     lexpect_keyword(KEYWORD_ENDFOR);
-    lexpect_text("\n");
+    lexpect_text("\n\n");
     lexpect_keyword(KEYWORD_INCLUDE);
     lexpect_string("/srv/http/templates/footer.txt");
-    lexpect_text("\nLast little bit down here\n");
+    lexpect_text("\n\nLast little bit down here\n");
 }
 
 /* vi: set et ts=4 sw=4: */
