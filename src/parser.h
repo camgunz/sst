@@ -48,7 +48,7 @@ enum {
 };
 
 typedef struct {
-    ASTNode node;
+    ASTNode *node;
     Lexer lexer;
     ExpressionParser expression_parser;
     bool already_loaded_next;
@@ -59,7 +59,7 @@ typedef struct {
 bool parser_init(Parser *parser, SSlice *data, Status *status);
 void parser_clear(Parser *parser);
 void parser_free(Parser *parser);
-bool parser_load_next(Parser *parser, Status *status);
+bool parser_load_next(Parser *parser, ASTNode *node, Status *status);
 
 bool expression_to_string(PArray *expression, String *str, Status *status);
 bool expression_to_cstr(PArray *expression, char **str, Status *status);

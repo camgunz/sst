@@ -262,10 +262,10 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
                 return expected_string(status);
             }
 
-            parser->node.type = AST_NODE_INCLUDE;
+            parser->node->type = AST_NODE_INCLUDE;
 
             sslice_copy(
-                &parser->node.as.include,
+                &parser->node->as.include,
                 &parser->lexer.code_token.as.string
             );
 
@@ -291,7 +291,7 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
                 return false;
             }
 
-            parser->node.type = AST_NODE_CONDITIONAL;
+            parser->node->type = AST_NODE_CONDITIONAL;
 
             break;
         case KEYWORD_ELSE:
@@ -299,7 +299,7 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
                 return else_without_if(status);
             }
 
-            parser->node.type = AST_NODE_ELSE;
+            parser->node->type = AST_NODE_ELSE;
 
             break;
         case KEYWORD_ENDIF:
@@ -309,7 +309,7 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
 
             parser->conditional_depth--;
 
-            parser->node.type = AST_NODE_CONDITIONAL_END;
+            parser->node->type = AST_NODE_CONDITIONAL_END;
 
             break;
         case KEYWORD_FOR:
@@ -356,10 +356,10 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
                 return false;
             }
 
-            parser->node.type = AST_NODE_ITERATION;
+            parser->node->type = AST_NODE_ITERATION;
 
             sslice_copy(
-                &parser->node.as.iteration_identifier,
+                &parser->node->as.iteration_identifier,
                 &iteration_identifier
             );
 
@@ -371,7 +371,7 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
                 return break_without_for(status);
             }
 
-            parser->node.type = AST_NODE_BREAK;
+            parser->node->type = AST_NODE_BREAK;
 
             break;
         case KEYWORD_CONTINUE:
@@ -379,7 +379,7 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
                 return continue_without_for(status);
             }
 
-            parser->node.type = AST_NODE_CONTINUE;
+            parser->node->type = AST_NODE_CONTINUE;
 
             break;
         case KEYWORD_ENDFOR:
@@ -389,7 +389,7 @@ bool parser_parse_keyword(Parser *parser, Status *status) {
 
             parser->iteration_depth--;
 
-            parser->node.type = AST_NODE_ITERATION_END;
+            parser->node->type = AST_NODE_ITERATION_END;
 
             break;
         default:
@@ -435,7 +435,7 @@ void parser_free(Parser *parser) {
     parser->iteration_depth = 0;
 }
 
-bool parser_load_next(Parser *parser, Status *status) {
+bool parser_load_next(Parser *parser, ASTNode *node, Status *status) {
     if (!parser->already_loaded_next) {
         if (!lexer_load_next(&parser->lexer, status)) {
             return eof(status);
@@ -444,14 +444,16 @@ bool parser_load_next(Parser *parser, Status *status) {
 
     parser->already_loaded_next = false;
 
+    parser->node = node;
+
     switch (parser->lexer.code_token.type) {
         case CODE_TOKEN_KEYWORD:
             return parser_parse_keyword(parser, status);
         case CODE_TOKEN_TEXT:
-            parser->node.type = AST_NODE_TEXT;
+            parser->node->type = AST_NODE_TEXT;
 
             sslice_copy(
-                &parser->node.as.text,
+                &parser->node->as.text,
                 &parser->lexer.code_token.as.text
             );
 
@@ -467,7 +469,7 @@ bool parser_load_next(Parser *parser, Status *status) {
                 return false;
             }
 
-            parser->node.type = AST_NODE_EXPRESSION;
+            parser->node->type = AST_NODE_EXPRESSION;
 
             return status_ok(status);
         default:

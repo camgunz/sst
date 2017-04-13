@@ -395,7 +395,25 @@ bool value_equal(Value *result, Value *op1, Value *op2, Status *status) {
     return status_ok(status);
 }
 
-bool value_to_cstr(char **s, Value *value, Status *status) {
+bool value_to_string(Value *value, String *s, Status *status) {
+    switch (value->type) {
+        case VALUE_NONE:
+            return string_append_cstr("Uninitialized value", status);
+        case VALUE_BOOLEAN:
+            if (value->as.boolean) {
+                return string_append_cstr("true", status);
+            }
+            return string_append_cstr("false", status);
+        case VALUE_NUMBER:
+            return decimal_to_sci_string(&value->as.number, false, s, status);
+        case VALUE_STRING:
+            return string_append_string(value->as.string, status)
+        default:
+            return invalid_type(status);
+    }
+}
+
+bool value_to_cstr(Value *value, char **s, Status *status) {
     char *local_s = NULL;
 
     switch (value->type) {

@@ -110,12 +110,14 @@ ENDIF()
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src)
 
 SET(LIBSST_SOURCE_FILES
+  ${CMAKE_SOURCE_DIR}/src/expression_evaluator.c
+  ${CMAKE_SOURCE_DIR}/src/expression_parser.c
   ${CMAKE_SOURCE_DIR}/src/lang.c
-  ${CMAKE_SOURCE_DIR}/src/value.c
-  ${CMAKE_SOURCE_DIR}/src/tokenizer.c
   ${CMAKE_SOURCE_DIR}/src/lexer.c
   ${CMAKE_SOURCE_DIR}/src/parser.c
-  ${CMAKE_SOURCE_DIR}/src/expression_parser.c
+  ${CMAKE_SOURCE_DIR}/src/template.c
+  ${CMAKE_SOURCE_DIR}/src/tokenizer.c
+  ${CMAKE_SOURCE_DIR}/src/value.c
 )
 
 SET(LIBSST_LIBRARIES

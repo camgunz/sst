@@ -7,7 +7,7 @@
 #include "expression_parser.h"
 #include "parser.h"
 
-#define EXPRESSION_PARSER_INIT_ALLOC 16
+#define EXPRESSION_PARSER_INIT_ALLOC 32
 
 #define unexpected_comma(status) status_failure( \
     status,                                      \

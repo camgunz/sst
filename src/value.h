@@ -78,7 +78,8 @@ bool value_and(Value *result, Value *op1, Value *op2, Status *status);
 bool value_or(Value *result, Value *op1, Value *op2, Status *status);
 bool value_not(Value *result, Value *op1, Status *status);
 bool value_equal(Value *result, Value *op1, Value *op2, Status *status);
-bool value_to_cstr(char **s, Value *value, Status *status);
+bool value_to_string(Value *value, String *s, Status *status);
+bool value_to_cstr(Value *value, char **s, Status *status);
 void value_free(Value *value);
 
 static inline

@@ -13,7 +13,7 @@
 
 #include "data.h"
 
-#define NO_ALLOC 1
+#define NO_ALLOC 0
 
 void print_text_node(ASTNode *node) {
 #if NO_ALLOC
@@ -107,6 +107,7 @@ void test_parser(void **state) {
     String s;
     SSlice ss;
     Status status;
+    ASTNode node;
     Parser parser;
 
     (void)state;
@@ -118,13 +119,13 @@ void test_parser(void **state) {
 
     assert_true(parser_init(&parser, &ss, &status));
 
-    while (parser_load_next(&parser, &status)) {
-        switch (parser.node.type) {
+    while (parser_load_next(&parser, &node, &status)) {
+        switch (parser.node->type) {
             case AST_NODE_TEXT:
-                print_text_node(&parser.node);
+                print_text_node(parser.node);
                 break;
             case AST_NODE_INCLUDE:
-                print_include_node(&parser.node);
+                print_include_node(parser.node);
                 break;
             case AST_NODE_EXPRESSION:
                 if (!print_expression(&parser.expression_parser, &status)) {
@@ -144,7 +145,7 @@ void test_parser(void **state) {
                 puts("<Conditional (end)>");
                 break;
             case AST_NODE_ITERATION:
-                if (!print_iteration_node(&parser.node,
+                if (!print_iteration_node(parser.node,
                                           &parser.expression_parser,
                                           &status)) {
                     printf("Error: %s\n", status.message);
@@ -160,7 +161,7 @@ void test_parser(void **state) {
                 puts("<Iteration (end)>");
                 break;
             default:
-                printf("Unknown node type %d\n", parser.node.type);
+                printf("Unknown node type %d\n", parser.node->type);
                 break;
         }
     }
